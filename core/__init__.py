@@ -1,6 +1,6 @@
 """
-Unsloth Multi-GPU Core 模块
-包含多GPU训练的核心组件
+Unsloth Multi-GPU Core module
+Contains the core components for multi-GPU training
 """
 
 from .batch_sharding import AdaptiveBatchSharding, BatchSharding
@@ -19,5 +19,5 @@ __all__ = [
     'MemoryManager'
 ]
 
-# 版本信息
+# Version information
 __version__ = "1.0.0"

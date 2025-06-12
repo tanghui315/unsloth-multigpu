@@ -2,6 +2,8 @@
 
 An external extension package that provides multi-GPU parallel training support for the Unsloth framework.
 
+**[中文文档 / Chinese Documentation](README_CN.md)**
+
 ## 🎯 Project Features
 
 - **Zero-intrusive design**: No need to modify Unsloth source code
@@ -10,6 +12,17 @@ An external extension package that provides multi-GPU parallel training support 
 - **Simple to use**: Just add a single import statement
 
 ## 📦 Installation Requirements
+
+### Install from GitHub
+```bash
+# Install directly from GitHub
+pip install git+https://github.com/tanghui315/unsloth-multigpu.git
+
+# Or clone and install locally
+git clone https://github.com/tanghui315/unsloth-multigpu.git
+cd unsloth-multigpu
+pip install .
+```
 
 ### Required Dependencies
 ```bash
@@ -30,6 +43,15 @@ Make sure Unsloth is installed correctly, as the project requires the `unsloth_t
 python examples/verify_installation.py
 ```
 
+### Verify Installation
+```bash
+# Check if package is installed
+pip list | grep unsloth-multigpu
+
+# Test import
+python -c "import unsloth_multigpu; print('✅ Installation successful!')"
+```
+
 ### Optional Dependencies
 ```bash
 # TensorBoard support
@@ -43,11 +65,11 @@ pip install wandb
 
 ### Method 1: Hook Mechanism (Recommended for Existing Code)
 ```python
-import unsloth_multigpu_prototype as unsloth_multigpu
+import unsloth_multigpu as ump
 from unsloth import FastLanguageModel, unsloth_train
 
 # 1. Enable multi-GPU support (Hook mechanism)
-unsloth_multigpu.enable_multi_gpu(
+ump.enable_multi_gpu(
     num_gpus=4,  # Use 4 GPUs
     batch_size_per_gpu=8,  # Batch size per GPU
     gradient_aggregation="mean"  # Gradient aggregation strategy
@@ -72,7 +94,7 @@ trainer_stats = unsloth_train(
 
 ### Method 2: Direct Usage (Recommended for New Projects)
 ```python
-from unsloth_multigpu_prototype.core import MultiGPUTrainer, AggregationMethod
+from unsloth_multigpu.core import MultiGPUTrainer, AggregationMethod
 from unsloth import FastLanguageModel
 
 # 1. Load model
@@ -99,7 +121,7 @@ epoch_stats = trainer.train_epoch(dataloader)
 
 ### Advanced Configuration
 ```python
-from unsloth_multigpu_prototype.utils import ConfigManager, DeviceManager
+from unsloth_multigpu.utils import ConfigManager, DeviceManager
 
 # 1. Device management
 device_manager = DeviceManager()
@@ -113,13 +135,13 @@ optimal_config = config_manager.get_optimal_config(
 )
 
 # 3. Enable multi-GPU (using optimal config)
-unsloth_multigpu.enable_multi_gpu(**optimal_config)
+ump.enable_multi_gpu(**optimal_config)
 ```
 
 ## 📁 Project Structure
 
 ```
-unsloth_multigpu_prototype/
+unsloth_multigpu/
 ├── __init__.py              # Main entry
 ├── core/                    # Core components
 │   ├── multi_gpu_manager.py # Multi-GPU manager
@@ -179,7 +201,7 @@ unsloth_multigpu_prototype/
 
 Run the full test suite:
 ```bash
-cd unsloth_multigpu_prototype
+cd unsloth-multigpu
 python tests/run_all_tests.py
 ```
 
@@ -229,6 +251,25 @@ If you encounter issues, please:
 1. Check if dependencies are installed correctly
 2. Run the test suite to verify the environment
 3. Refer to the example code
+
+---
+
+## 🌐 Language Support
+
+- **English**: This document
+- **中文**: [README_CN.md](README_CN.md)
+
+## 📞 Support & Contributing
+
+- **GitHub Repository**: [https://github.com/tanghui315/unsloth-multigpu](https://github.com/tanghui315/unsloth-multigpu)
+- **Issues**: [Report bugs or request features](https://github.com/tanghui315/unsloth-multigpu/issues)
+- **Discussions**: [Community discussions](https://github.com/tanghui315/unsloth-multigpu/discussions)
+
+If you encounter issues, please:
+1. Check if dependencies are installed correctly
+2. Run the test suite to verify the environment
+3. Refer to the example code
+4. Search existing issues or create a new one
 
 ---
 

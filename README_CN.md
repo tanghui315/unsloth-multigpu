@@ -43,7 +43,7 @@ pip install wandb
 
 ### 方式1: Hook机制（推荐用于现有代码）
 ```python
-import unsloth_multigpu_prototype as unsloth_multigpu
+import unsloth_multigpu as unsloth_multigpu
 from unsloth import FastLanguageModel, unsloth_train
 
 # 1. 启用多GPU支持（Hook机制）
@@ -72,7 +72,7 @@ trainer_stats = unsloth_train(
 
 ### 方式2: 直接使用（推荐用于新项目）
 ```python
-from unsloth_multigpu_prototype.core import MultiGPUTrainer, AggregationMethod
+from unsloth_multigpu.core import MultiGPUTrainer, AggregationMethod
 from unsloth import FastLanguageModel
 
 # 1. 加载模型
@@ -99,7 +99,7 @@ epoch_stats = trainer.train_epoch(dataloader)
 
 ### 高级配置
 ```python
-from unsloth_multigpu_prototype.utils import ConfigManager, DeviceManager
+from unsloth_multigpu.utils import ConfigManager, DeviceManager
 
 # 1. 设备管理
 device_manager = DeviceManager()
@@ -119,7 +119,7 @@ unsloth_multigpu.enable_multi_gpu(**optimal_config)
 ## 📁 项目结构
 
 ```
-unsloth_multigpu_prototype/
+unsloth_multigpu/
 ├── __init__.py              # 主入口
 ├── core/                    # 核心组件
 │   ├── multi_gpu_manager.py # 多GPU管理器
@@ -179,7 +179,7 @@ unsloth_multigpu_prototype/
 
 运行完整测试套件：
 ```bash
-cd unsloth_multigpu_prototype
+cd unsloth_multigpu
 python tests/run_all_tests.py
 ```
 

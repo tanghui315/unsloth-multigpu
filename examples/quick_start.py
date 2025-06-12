@@ -1,15 +1,3 @@
-'''
-Author: tanghui315 tanghui315@126.com
-Date: 2025-06-06 11:47:37
-LastEditors: tanghui315 tanghui315@126.com
-LastEditTime: 2025-06-12 09:51:32
-FilePath: /us-train/unsloth_multigpu_prototype/examples/quick_start.py
-Description: This is the default setting, please set `customMade`, open koroFileHeader to view and set: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
-'''
-"""
-Unsloth Multi-GPU Quick Start Example
-This example demonstrates how to use Unsloth Multi-GPU for model training
-"""
 
 import os
 

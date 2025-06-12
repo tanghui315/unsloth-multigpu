@@ -31,8 +31,8 @@ setup(
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     author="Unsloth MultiGPU Team",
-    author_email="support@unsloth-multigpu.com",
-    url="https://github.com/unsloth/unsloth-multigpu",
+    author_email="tanghui315@126.com",
+    url="https://github.com/tanghui315/unsloth-multigpu",
     
     packages=["unsloth_multigpu"],
     package_dir={"unsloth_multigpu": "."},
@@ -99,8 +99,8 @@ setup(
     ],
     
     project_urls={
-        "Bug Reports": "https://github.com/unsloth/unsloth-multigpu/issues",
-        "Source": "https://github.com/unsloth/unsloth-multigpu",
+        "Bug Reports": "https://github.com/tanghui315/unsloth-multigpu/issues",
+        "Source": "https://github.com/tanghui315/unsloth-multigpu",
         "Documentation": "https://unsloth-multigpu.readthedocs.io/",
     },
     
