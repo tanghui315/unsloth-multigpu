@@ -1,0 +1,16 @@
+# 核心依赖
+torch>=1.12.0
+transformers>=4.30.0
+accelerate>=0.20.0
+datasets>=2.0.0
+psutil>=5.8.0
+PyYAML>=6.0
+numpy>=1.21.0
+tqdm>=4.64.0
+
+# 可选依赖（用于完整功能）
+# tensorboard>=2.10.0  # 取消注释以启用TensorBoard支持
+# wandb>=0.13.0        # 取消注释以启用W&B支持
+
+# 注意：需要单独安装Unsloth
+# pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" 
