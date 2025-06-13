@@ -34,8 +34,7 @@ setup(
     author_email="tanghui315@126.com",
     url="https://github.com/tanghui315/unsloth-multigpu",
     
-    packages=["unsloth_multigpu"],
-    package_dir={"unsloth_multigpu": "."},
+    packages=find_packages(include=["unsloth_multigpu", "unsloth_multigpu.*"]),
     python_requires=">=3.8",
     
     install_requires=[

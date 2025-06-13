@@ -10,10 +10,10 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from transformers import TrainingArguments
 from unsloth import FastLanguageModel
+
 # Directly import our core components
-from unsloth_multigpu_prototype.core import AggregationMethod, MultiGPUTrainer
-from unsloth_multigpu_prototype.utils import (ConfigManager, DeviceManager,
-                                              MultiGPULogger)
+from unsloth_multigpu.core import AggregationMethod, MultiGPUTrainer
+from unsloth_multigpu.utils import ConfigManager, DeviceManager, MultiGPULogger
 
 
 def create_dataloader(dataset, tokenizer, batch_size=8):
@@ -64,7 +64,7 @@ def main():
     model, tokenizer = FastLanguageModel.from_pretrained(
         "unsloth/llama-2-7b-bnb-4bit",
         max_seq_length=2048,
-        dtype="bfloat16",
+        dtype=torch.bfloat16,
         load_in_4bit=True
     )
     

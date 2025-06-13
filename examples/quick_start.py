@@ -1,20 +1,22 @@
-
 import os
 
 import torch
+# 确保首先导入 unsloth 以避免性能警告
+import unsloth
 from datasets import load_dataset
 from transformers import TrainingArguments
-
-import unsloth_multigpu_prototype as unsloth_multigpu
 from unsloth import FastLanguageModel, unsloth_train
+
+import unsloth_multigpu as unsloth_multigpu
 
 
 def main():
+    batch_size_per_gpu = 2
     # 1. Enable multi-GPU support
     print("🚀 Enable multi-GPU support...")
     unsloth_multigpu.enable_multi_gpu(
-        num_gpus=4,  # Use 4 GPUs
-        batch_size_per_gpu=8,  # Batch size per GPU
+        num_gpus=2,  # Use 4 GPUs
+        batch_size_per_gpu=batch_size_per_gpu,  # Batch size per GPU
         gradient_aggregation="mean"  # Gradient aggregation strategy
     )
 
@@ -25,9 +27,9 @@ def main():
     # 3. Load model
     print("📥 Load model...")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        "unsloth/llama-2-7b-bnb-4bit",  # Use 4bit quantized version
+        "/home/valiantsec/cjr/models/Qwen/Qwen2.5-Coder-7B-Instruct/",  # Use 4bit quantized version
         max_seq_length=4096,
-        dtype="bfloat16",
+        dtype=torch.bfloat16,
         load_in_4bit=True
     )
 
@@ -50,12 +52,13 @@ def main():
     training_args = TrainingArguments(
         output_dir="./results",
         num_train_epochs=3,
-        per_device_train_batch_size=8,
-        gradient_accumulation_steps=4,
-        learning_rate=2e-4,
+        per_device_train_batch_size=batch_size_per_gpu,
+        gradient_accumulation_steps=1,
+        learning_rate=2e-5,
+        save_strategy = "steps",
+        save_steps=100,
         fp16=True,
-        logging_steps=10,
-        save_strategy="epoch",
+        logging_steps=1,
         warmup_ratio=0.1,
     )
 

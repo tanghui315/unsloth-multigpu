@@ -6,12 +6,12 @@ This example demonstrates how to use Unsloth Multi-GPU's advanced features and c
 import os
 
 import torch
-import unsloth_multigpu_prototype as unsloth_multigpu
 from datasets import load_dataset
 from transformers import TrainingArguments
 from unsloth import FastLanguageModel, unsloth_train
-from unsloth_multigpu_prototype.utils import (ConfigManager, DeviceManager,
-                                              MultiGPULogger)
+
+import unsloth_multigpu as unsloth_multigpu
+from unsloth_multigpu.utils import ConfigManager, DeviceManager, MultiGPULogger
 
 
 def main():
@@ -55,7 +55,7 @@ def main():
     model, tokenizer = FastLanguageModel.from_pretrained(
         "unsloth/llama-2-7b-bnb-4bit",
         max_seq_length=2048,
-        dtype="bfloat16",
+        dtype=torch.bfloat16,
         load_in_4bit=True
     )
 
