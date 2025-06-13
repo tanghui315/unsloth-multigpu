@@ -11,21 +11,23 @@
 
 ## 📦 安装要求
 
-### 必需依赖
+### 快速安装
 ```bash
-# 1. 安装Unsloth (必需 - 包含unsloth_train函数)
-pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
-
-# 2. 安装PyTorch (GPU版本)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-
-# 3. 安装其他依赖
-pip install transformers datasets accelerate
-pip install psutil PyYAML  # 用于内存管理和配置
+# 克隆项目并安装
+git clone https://github.com/tanghui315/unsloth-multigpu.git
+cd unsloth-multigpu
+pip install .
 ```
 
+### 详细依赖要求
+本项目依赖以下包（安装时会自动处理）：
+- Unsloth (包含 unsloth_train 函数)
+- PyTorch (GPU版本)
+- Transformers, datasets, accelerate
+- psutil, PyYAML（用于内存管理和配置）
+
 ### ⚠️ 重要说明
-确保正确安装Unsloth包，因为项目需要使用其中的 `unsloth_train` 函数。如果遇到导入错误，请运行验证脚本：
+确保系统中有CUDA支持。如果遇到导入错误，请运行验证脚本：
 ```bash
 python examples/verify_installation.py
 ```
@@ -42,22 +44,30 @@ pip install wandb
 ## 🚀 快速开始
 
 ### 方式1: Hook机制（推荐用于现有代码）
+
+#### 运行示例
+```bash
+# 使用2个GPU运行快速开始示例
+CUDA_VISIBLE_DEVICES=0,1 python examples/quick_start.py
+```
+
+#### 代码示例
 ```python
 import unsloth_multigpu as unsloth_multigpu
 from unsloth import FastLanguageModel, unsloth_train
 
 # 1. 启用多GPU支持（Hook机制）
 unsloth_multigpu.enable_multi_gpu(
-    num_gpus=4,  # Use 4 GPUs
-    batch_size_per_gpu=8,  # Batch size per GPU
-    gradient_aggregation="mean"  # Gradient aggregation strategy
+    num_gpus=2,  # 使用2个GPU
+    batch_size_per_gpu=2,  # 每个GPU的批次大小
+    gradient_aggregation="mean"  # 梯度聚合策略
 )
 
 # 2. 加载模型（自动支持多GPU）
 model, tokenizer = FastLanguageModel.from_pretrained(
-    "unsloth/llama-2-7b-bnb-4bit",  # Use 4bit quantized version
-    max_seq_length=2048,
-    dtype="bfloat16",
+    "/path/to/your/model",  # 模型路径
+    max_seq_length=4096,
+    dtype=torch.bfloat16,  # 注意：使用torch.bfloat16而不是字符串
     load_in_4bit=True
 )
 

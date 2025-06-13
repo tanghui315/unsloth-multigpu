@@ -13,32 +13,23 @@ An external extension package that provides multi-GPU parallel training support 
 
 ## 📦 Installation Requirements
 
-### Install from GitHub
+### Quick Installation
 ```bash
-# Install directly from GitHub
-pip install git+https://github.com/tanghui315/unsloth-multigpu.git
-
-# Or clone and install locally
+# Clone and install the project
 git clone https://github.com/tanghui315/unsloth-multigpu.git
 cd unsloth-multigpu
 pip install .
 ```
 
-### Required Dependencies
-```bash
-# 1. Install Unsloth (required - includes unsloth_train function)
-pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git"
-
-# 2. Install PyTorch (GPU version)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-
-# 3. Install other dependencies
-pip install transformers datasets accelerate
-pip install psutil PyYAML  # For memory management and configuration
-```
+### Dependency Details
+This project depends on the following packages (automatically handled during installation):
+- Unsloth (includes unsloth_train function)
+- PyTorch (GPU version)
+- Transformers, datasets, accelerate
+- psutil, PyYAML (for memory management and configuration)
 
 ### ⚠️ Important Note
-Make sure Unsloth is installed correctly, as the project requires the `unsloth_train` function. If you encounter import errors, run the verification script:
+Ensure your system has CUDA support. If you encounter import errors, run the verification script:
 ```bash
 python examples/verify_installation.py
 ```
@@ -64,22 +55,30 @@ pip install wandb
 ## 🚀 Quick Start
 
 ### Method 1: Hook Mechanism (Recommended for Existing Code)
+
+#### Running Example
+```bash
+# Run quick start example with 2 GPUs
+CUDA_VISIBLE_DEVICES=0,1 python examples/quick_start.py
+```
+
+#### Code Example
 ```python
 import unsloth_multigpu as ump
 from unsloth import FastLanguageModel, unsloth_train
 
 # 1. Enable multi-GPU support (Hook mechanism)
 ump.enable_multi_gpu(
-    num_gpus=4,  # Use 4 GPUs
-    batch_size_per_gpu=8,  # Batch size per GPU
+    num_gpus=2,  # Use 2 GPUs
+    batch_size_per_gpu=2,  # Batch size per GPU
     gradient_aggregation="mean"  # Gradient aggregation strategy
 )
 
 # 2. Load model (multi-GPU supported automatically)
 model, tokenizer = FastLanguageModel.from_pretrained(
-    "unsloth/llama-2-7b-bnb-4bit",  # Use 4bit quantized version
-    max_seq_length=2048,
-    dtype="bfloat16",
+    "/path/to/your/model",  # Model path
+    max_seq_length=4096,
+    dtype=torch.bfloat16,  # Note: use torch.bfloat16 instead of string
     load_in_4bit=True
 )
 
