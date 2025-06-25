@@ -86,6 +86,7 @@ def main():
         tokenizer=tokenizer,
         train_dataset=dataset,
         args=training_args,
+        dataset_text_field="text",
         max_seq_length=4096
     )
 
