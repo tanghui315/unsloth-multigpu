@@ -243,7 +243,7 @@ class MultiGPUTrainer:
                 gradients = {}
                 for name, param in model.named_parameters():
                     if param.grad is not None:
-                        gradients[name] = param.grad.clone().detach()
+                        gradients[name] = param.grad.detach().cpu()
                 gradients_per_gpu.append(gradients)
 
         return losses, gradients_per_gpu

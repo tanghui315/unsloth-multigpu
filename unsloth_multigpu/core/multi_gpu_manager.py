@@ -67,10 +67,17 @@ class MultiGPUManager:
             logger.warning("Device models already set up, skipping repeated setup")
             return
             
-        logger.info(f"�� Starting to set up model replicas on {self.num_gpus} GPUs...")
+        logger.info(f"Starting to set up model replicas on {self.num_gpus} GPUs...")
         
         start_time = time.time()
         
+        # ---------- Plan A: Move the original model back to CPU first to avoid two copies of weights on GPU-0 ----------
+        import torch  # Local import to avoid circular dependency
+        self.base_model.to("cpu")
+        # Immediately release the original main GPU cache to avoid reserved memory still being occupied after to(cpu)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         for gpu_id in range(self.num_gpus):
             device = f"cuda:{gpu_id}"
             
@@ -79,8 +86,8 @@ class MultiGPUManager:
                 
                 # Deep copy model to specified GPU
                 if gpu_id == self.master_gpu:
-                    # Main GPU uses original model
-                    model_copy = self.base_model.to(device)
+                    # The main GPU uses the original model (only move once, non_blocking for further acceleration)
+                    model_copy = self.base_model.to(device, non_blocking=True)
                 else:
                     # Other GPUs create deep copy
                     model_copy = copy.deepcopy(self.base_model).to(device)
@@ -99,6 +106,10 @@ class MultiGPUManager:
                 cached = torch.cuda.memory_reserved(gpu_id) / 1024**3  # GB
                 logger.info(f"   GPU {gpu_id} Memory Usage: {allocated:.2f}GB allocated, {cached:.2f}GB cached")
         
+        # ---------- Plan A: After the loop, release base_model on CPU to reduce extra usage ----------
+        del self.base_model
+        torch.cuda.empty_cache()
+
         setup_time = time.time() - start_time
         self._setup_complete = True
         

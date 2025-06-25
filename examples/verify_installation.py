@@ -163,10 +163,10 @@ def main():
     # Check project modules
     print("\n🔧 Checking project modules:")
     project_modules = [
-        ("unsloth_multigpu_prototype", None),
-        ("MultiGPUManager", "unsloth_multigpu_prototype.core"),
-        ("ConfigManager", "unsloth_multigpu_prototype.utils"),
-        ("MultiGPULogger", "unsloth_multigpu_prototype.utils"),
+        ("unsloth_multigpu", None),
+        ("MultiGPUManager", "unsloth_multigpu.core"),
+        ("ConfigManager", "unsloth_multigpu.utils"),
+        ("MultiGPULogger", "unsloth_multigpu.utils"),
     ]
     
     for module, from_package in project_modules:
@@ -202,7 +202,7 @@ def main():
     print("\n🧪 Testing main functionality:")
     
     try:
-        import unsloth_multigpu_prototype as unsloth_multigpu
+        import unsloth_multigpu as unsloth_multigpu
         print("✅ Main module import successful")
         
         # Test status query
@@ -217,7 +217,7 @@ def main():
             
     except Exception as e:
         print(f"❌ Test failed: {e}")
-        failed_deps.append("unsloth_multigpu_prototype")
+        failed_deps.append("unsloth_multigpu")
     
     # Summarize results
     print("\n" + "=" * 50)
@@ -235,7 +235,7 @@ def main():
     else:
         print("✅ All verification passed! Unsloth Multi-GPU support package installed correctly")
         print("\n🚀 Quick start:")
-        print("   import unsloth_multigpu_prototype as unsloth_multigpu")
+        print("   import unsloth_multigpu as unsloth_multigpu")
         print("   unsloth_multigpu.enable_multi_gpu()")
         print("\n📚 View example:")
         print("   python examples/quick_start.py")

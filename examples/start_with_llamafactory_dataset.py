@@ -20,7 +20,7 @@ batch_size_per_gpu = 2
 # Define necessary argument classes
 @dataclass
 class ModelArguments(ModelArguments):
-    model_name_or_path: str = "Qwen/Qwen2.5-Coder-7B-Instruct"
+    model_name_or_path: str = "Qwen/Qwen2.5-Coder-32B-Instruct"
     trust_remote_code: bool = True
     use_fast_tokenizer: bool = True
     cache_dir: str = None 

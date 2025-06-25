@@ -152,8 +152,8 @@ class TrainerHooks:
         try:
             from transformers import Trainer
 
-            import unsloth_multigpu_prototype as uns_mgpu
-            from unsloth_multigpu_prototype.core import MultiGPUTrainer
+            import unsloth_multigpu as uns_mgpu
+            from unsloth_multigpu.core import MultiGPUTrainer
 
             # Save original train method
             original_train = Trainer.train
