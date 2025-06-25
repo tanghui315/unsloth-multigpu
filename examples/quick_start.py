@@ -1,11 +1,9 @@
-import os
-
 import torch
 # 确保首先导入 unsloth 以避免性能警告
-import unsloth
 from datasets import load_dataset
 from transformers import TrainingArguments
-from unsloth import FastLanguageModel, unsloth_train
+from trl import SFTTrainer
+from unsloth import FastLanguageModel
 
 import unsloth_multigpu as unsloth_multigpu
 
@@ -33,6 +31,22 @@ def main():
         load_in_4bit=True
     )
 
+    # 3.5. Configure LoRA
+    print("⚙️ Configure LoRA...")
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=16,  # LoRA rank
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                       "gate_proj", "up_proj", "down_proj"],
+        lora_alpha=16,
+        lora_dropout=0,
+        bias="none",
+        use_gradient_checkpointing="unsloth",
+        random_state=3407,
+        use_rslora=False,
+        loftq_config=None,
+    )
+
     # 4. Prepare dataset
     print("📚 Prepare dataset...")
     dataset = load_dataset("tatsu-lab/alpaca", split="train")
@@ -45,7 +59,10 @@ def main():
                 text += f"### Input:\n{example['input'][i]}\n\n"
             text += f"### Response:\n{example['output'][i]}"
             output_texts.append(text)
-        return output_texts
+        return {"text": output_texts}
+
+    # Apply formatting to dataset
+    dataset = dataset.map(formatting_prompts_func, batched=True, remove_columns=dataset.column_names)
 
     # 5. Configure training parameters
     print("⚙️ Configure training parameters...")
@@ -62,15 +79,19 @@ def main():
         warmup_ratio=0.1,
     )
 
-    # 6. Start training
-    print("🎯 Start training...")
-    trainer_stats = unsloth_train(
+    # 6. Create SFTTrainer
+    print("⚙️ Create SFTTrainer...")
+    trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
         train_dataset=dataset,
-        formatting_prompts_func=formatting_prompts_func,
-        training_args=training_args
+        args=training_args,
+        max_seq_length=4096
     )
+
+    # 7. Start training
+    print("🎯 Start training...")
+    trainer_stats = trainer.train()
 
     print("✅ Training completed!")
     print(f"📊 Training statistics: {trainer_stats}")
