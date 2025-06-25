@@ -21,7 +21,8 @@ pip install .
 
 ### 详细依赖要求
 本项目依赖以下包（安装时会自动处理）：
-- Unsloth (包含 unsloth_train 函数)
+- Unsloth (提供FastLanguageModel和LoRA支持)
+- TRL (提供SFTTrainer用于监督式微调)
 - PyTorch (GPU版本)
 - Transformers, datasets, accelerate
 - psutil, PyYAML（用于内存管理和配置）
@@ -54,7 +55,9 @@ CUDA_VISIBLE_DEVICES=0,1 python examples/quick_start.py
 #### 代码示例
 ```python
 import unsloth_multigpu as unsloth_multigpu
-from unsloth import FastLanguageModel, unsloth_train
+from unsloth import FastLanguageModel
+from trl import SFTTrainer
+from transformers import TrainingArguments
 
 # 1. 启用多GPU支持（Hook机制）
 unsloth_multigpu.enable_multi_gpu(
@@ -71,13 +74,41 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     load_in_4bit=True
 )
 
-# 3. 使用原生unsloth_train（内部被Hook替换为多GPU逻辑）
-trainer_stats = unsloth_train(
+# 3. 配置LoRA（unsloth训练必需）
+model = FastLanguageModel.get_peft_model(
+    model,
+    r=16,  # LoRA秩
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                   "gate_proj", "up_proj", "down_proj"],
+    lora_alpha=16,
+    lora_dropout=0,
+    bias="none",
+    use_gradient_checkpointing="unsloth",
+    random_state=3407,
+)
+
+# 4. 配置训练参数
+training_args = TrainingArguments(
+    output_dir="./results",
+    num_train_epochs=3,
+    per_device_train_batch_size=2,  # 这将被多GPU处理
+    learning_rate=2e-5,
+    logging_steps=1,
+    save_strategy="steps",
+    save_steps=100,
+)
+
+# 5. 创建SFTTrainer并训练（自动支持多GPU）
+trainer = SFTTrainer(
     model=model,
     tokenizer=tokenizer,
     train_dataset=dataset,
-    # ... 其他训练参数
+    dataset_text_field="text",  # 或使用formatting_func
+    args=training_args,
+    max_seq_length=4096,
 )
+
+trainer_stats = trainer.train()
 ```
 
 ### 方式2: 直接使用（推荐用于新项目）

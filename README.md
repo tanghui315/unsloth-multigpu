@@ -23,7 +23,8 @@ pip install .
 
 ### Dependency Details
 This project depends on the following packages (automatically handled during installation):
-- Unsloth (includes unsloth_train function)
+- Unsloth (provides FastLanguageModel and LoRA support)
+- TRL (provides SFTTrainer for supervised fine-tuning)
 - PyTorch (GPU version)
 - Transformers, datasets, accelerate
 - psutil, PyYAML (for memory management and configuration)
@@ -65,7 +66,9 @@ CUDA_VISIBLE_DEVICES=0,1 python examples/quick_start.py
 #### Code Example
 ```python
 import unsloth_multigpu as ump
-from unsloth import FastLanguageModel, unsloth_train
+from unsloth import FastLanguageModel
+from trl import SFTTrainer
+from transformers import TrainingArguments
 
 # 1. Enable multi-GPU support (Hook mechanism)
 ump.enable_multi_gpu(
@@ -82,13 +85,41 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     load_in_4bit=True
 )
 
-# 3. Use native unsloth_train (internally hooked to multi-GPU logic)
-trainer_stats = unsloth_train(
+# 3. Configure LoRA (required for unsloth)
+model = FastLanguageModel.get_peft_model(
+    model,
+    r=16,  # LoRA rank
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                   "gate_proj", "up_proj", "down_proj"],
+    lora_alpha=16,
+    lora_dropout=0,
+    bias="none",
+    use_gradient_checkpointing="unsloth",
+    random_state=3407,
+)
+
+# 4. Configure training arguments
+training_args = TrainingArguments(
+    output_dir="./results",
+    num_train_epochs=3,
+    per_device_train_batch_size=2,  # This will be handled by multi-GPU
+    learning_rate=2e-5,
+    logging_steps=1,
+    save_strategy="steps",
+    save_steps=100,
+)
+
+# 5. Create SFTTrainer and train (multi-GPU supported automatically)
+trainer = SFTTrainer(
     model=model,
     tokenizer=tokenizer,
     train_dataset=dataset,
-    # ... other training parameters
+    dataset_text_field="text",  # or use formatting_func
+    args=training_args,
+    max_seq_length=4096,
 )
+
+trainer_stats = trainer.train()
 ```
 
 ### Method 2: Direct Usage (Recommended for New Projects)

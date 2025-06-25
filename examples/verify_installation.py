@@ -88,7 +88,6 @@ def check_unsloth_with_fallback() -> List[Tuple[str, bool, str]]:
     # Try to import specific components (may fail on GPUs)
     unsloth_components = [
         "FastLanguageModel",
-        "unsloth_train",
     ]
     
     for component in unsloth_components:
@@ -106,6 +105,13 @@ def check_unsloth_with_fallback() -> List[Tuple[str, bool, str]]:
                 results.append((component, True, "Available (requires GPU to run)"))
             else:
                 results.append((component, False, f"Import failed: {error_msg}"))
+    
+    # Check TRL components separately
+    try:
+        from trl import SFTTrainer
+        results.append(("SFTTrainer (from trl)", True, "Available"))
+    except Exception as e:
+        results.append(("SFTTrainer (from trl)", False, f"Import failed: {e}"))
     
     return results
 
@@ -129,6 +135,7 @@ def main():
         ("transformers", None),
         ("datasets", None),
         ("accelerate", None),
+        ("trl", None),
         ("psutil", None),
         ("yaml", None),
         ("numpy", None),

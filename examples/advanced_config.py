@@ -8,7 +8,8 @@ import os
 import torch
 from datasets import load_dataset
 from transformers import TrainingArguments
-from unsloth import FastLanguageModel, unsloth_train
+from trl import SFTTrainer
+from unsloth import FastLanguageModel
 
 import unsloth_multigpu as unsloth_multigpu
 from unsloth_multigpu.utils import ConfigManager, DeviceManager, MultiGPULogger
@@ -59,6 +60,22 @@ def main():
         load_in_4bit=True
     )
 
+    # 6.5. Configure LoRA
+    logger.info("⚙️ Configuring LoRA...")
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=16,  # LoRA rank
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                       "gate_proj", "up_proj", "down_proj"],
+        lora_alpha=16,
+        lora_dropout=0,
+        bias="none",
+        use_gradient_checkpointing="unsloth",
+        random_state=3407,
+        use_rslora=False,
+        loftq_config=None,
+    )
+
     # 7. Prepare dataset
     logger.info("📚 Preparing dataset...")
     dataset = load_dataset("tatsu-lab/alpaca", split="train")
@@ -71,7 +88,10 @@ def main():
                 text += f"### Input:\n{example['input'][i]}\n\n"
             text += f"### Response:\n{example['output'][i]}"
             output_texts.append(text)
-        return output_texts
+        return {"text": output_texts}
+
+    # Apply formatting to dataset
+    dataset = dataset.map(formatting_prompts_func, batched=True, remove_columns=dataset.column_names)
 
     # 8. Configure training arguments
     logger.info("⚙️ Configuring training arguments...")
@@ -93,17 +113,23 @@ def main():
         max_grad_norm=1.0,           # Gradient clipping
     )
 
-    # 9. Start training
-    logger.info("🎯 Starting training...")
-    trainer_stats = unsloth_train(
+    # 9. Create SFTTrainer
+    logger.info("⚙️ Creating SFTTrainer...")
+    trainer = SFTTrainer(
         model=model,
         tokenizer=tokenizer,
         train_dataset=dataset,
-        formatting_prompts_func=formatting_prompts_func,
-        training_args=training_args
+        dataset_text_field="text",
+        args=training_args,
+        max_seq_length=2048,
+        packing=False,
     )
 
-    # 10. Save training statistics
+    # 10. Start training
+    logger.info("🎯 Starting training...")
+    trainer_stats = trainer.train()
+
+    # 11. Save training statistics
     logger.info("💾 Saving training statistics...")
     logger.save_training_stats(trainer_stats, "training_stats.json")
 
