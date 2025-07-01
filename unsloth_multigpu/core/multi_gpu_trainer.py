@@ -598,7 +598,7 @@ class MultiGPUTrainer:
         # 2️⃣ Fallback: Use Transformers helper function
         try:
             from transformers import Trainer as HFTrainer
-            optimizer_cls, optimizer_kwargs = HFTrainer.get_optimator_cls_and_kwargs(trainer.args)
+            optimizer_cls, optimizer_kwargs = HFTrainer.get_optimizer_cls_and_kwargs(trainer.args)
             return {
                 'class': optimizer_cls,
                 'kwargs': optimizer_kwargs,
