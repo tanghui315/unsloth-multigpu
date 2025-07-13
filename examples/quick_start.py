@@ -13,9 +13,9 @@ def main():
     # 1. Enable multi-GPU support
     print("🚀 Enable multi-GPU support...")
     unsloth_multigpu.enable_multi_gpu(
-        num_gpus=2,  # Use 4 GPUs
+        num_gpus=2,  # Use 2 GPUs
         batch_size_per_gpu=batch_size_per_gpu,  # Batch size per GPU
-        gradient_aggregation="mean"  # Gradient aggregation strategy
+        ddp_backend="nccl"  # DDP backend
     )
 
     # 2. Check system status

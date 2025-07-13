@@ -1,21 +1,19 @@
 """
 Unsloth Multi-GPU Core module
-Contains the core components for multi-GPU training
+Contains DDP-based multi-GPU training components
 """
 
-from .batch_sharding import AdaptiveBatchSharding, BatchSharding
-from .gradient_aggregator import AggregationMethod, GradientAggregator
+# DDP components (high-performance PyTorch native implementation)
+from .ddp_manager import DDPManager
+from .ddp_trainer import DDPTrainer
+from .ddp_launcher import DDPLauncher, launch_ddp_training
 from .memory_manager import MemoryManager
-from .multi_gpu_manager import MultiGPUManager
-from .multi_gpu_trainer import MultiGPUTrainer
 
 __all__ = [
-    'MultiGPUManager',
-    'MultiGPUTrainer',
-    'BatchSharding', 
-    'AdaptiveBatchSharding',
-    'GradientAggregator',
-    'AggregationMethod',
+    'DDPManager',
+    'DDPTrainer',
+    'DDPLauncher',
+    'launch_ddp_training',
     'MemoryManager'
 ]
 

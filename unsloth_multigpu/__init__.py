@@ -9,15 +9,14 @@ import sys
 import warnings
 from typing import Any, Dict, Optional
 
-# Import core components
+# Import DDP components
 try:
-    from .core import (AggregationMethod, BatchSharding, GradientAggregator,
-                       MultiGPUManager, MultiGPUTrainer)
+    from .core import DDPManager, DDPTrainer, launch_ddp_training
     from .utils import MultiGPUConfig
     CORE_COMPONENTS_AVAILABLE = True
 except ImportError as e:
     CORE_COMPONENTS_AVAILABLE = False
-    logging.warning(f"Failed to import core components: {e}")
+    logging.warning(f"Failed to import DDP components: {e}")
 
 # Import hook components
 try:
@@ -41,23 +40,25 @@ logger = logging.getLogger(__name__)
 
 def enable_multi_gpu(
     num_gpus: Optional[int] = None,
+    batch_size_per_gpu: int = 2,
     enable_memory_optimization: bool = True,
     enable_gradient_checkpointing: bool = True,
     debug: bool = False,
-    # Add parameters needed by users in examples, but keep it simple
-    batch_size_per_gpu: int = 2,
-    gradient_aggregation: str = "mean"
+    # DDP options
+    ddp_backend: str = "nccl",  # nccl for GPU, gloo for CPU
+    find_unused_parameters: bool = False
 ):
     """
-    Enable Unsloth Multi-GPU support
+    Enable Unsloth Multi-GPU support using PyTorch DDP
     
     Args:
         num_gpus: Number of GPUs to use, None for auto-detect
+        batch_size_per_gpu: Batch size per GPU device
         enable_memory_optimization: Whether to enable memory optimization
         enable_gradient_checkpointing: Whether to enable gradient checkpointing
         debug: Whether to enable debug mode
-        batch_size_per_gpu: Batch size per GPU
-        gradient_aggregation: Gradient aggregation method ("mean", "sum", "weighted_mean")
+        ddp_backend: DDP backend ("nccl" for GPU, "gloo" for CPU)
+        find_unused_parameters: DDP find_unused_parameters setting
     """
     global _MULTIGPU_ENABLED, _HOOK_MANAGERS, _ACTIVE_CONFIG
     
@@ -90,15 +91,17 @@ def enable_multi_gpu(
         elif num_gpus > available_gpus:
             raise ValueError(f"Requested {num_gpus} GPUs, but only {available_gpus} available.")
 
-        # Create simple config (internal use, transparent to user)
+        # Create DDP config
         if CORE_COMPONENTS_AVAILABLE:
             _ACTIVE_CONFIG = MultiGPUConfig(
                 num_gpus=num_gpus,
                 batch_size_per_gpu=batch_size_per_gpu,
-                gradient_aggregation=gradient_aggregation,
                 memory_optimization=enable_memory_optimization,
                 enable_gradient_checkpointing=enable_gradient_checkpointing,
-                log_level="DEBUG" if debug else "INFO"
+                log_level="DEBUG" if debug else "INFO",
+                # DDP settings
+                ddp_backend=ddp_backend,
+                find_unused_parameters=find_unused_parameters
             )
         else:
             # Fallback: only store basic parameters

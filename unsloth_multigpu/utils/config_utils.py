@@ -34,12 +34,12 @@ class MultiGPUConfig:
     weight_decay: float = 0.01
     warmup_steps: int = 100
     
-    # Multi-GPU specific configuration
-    gradient_aggregation: str = "mean"  # mean, sum, weighted_mean, median
-    batch_sharding_strategy: str = "uniform"  # uniform, adaptive, weighted
-    gradient_accumulation_strategy: str = "parallel"  # parallel, distributed
+    # DDP configuration
     enable_gradient_checkpointing: bool = True
     enable_mixed_precision: bool = True
+    ddp_backend: str = "nccl"  # nccl, gloo, or mpi
+    ddp_timeout_minutes: int = 30  # DDP operation timeout
+    find_unused_parameters: bool = False  # DDP find_unused_parameters
     
     # Memory management
     memory_optimization: bool = True
@@ -94,11 +94,11 @@ class MultiGPUConfig:
             logger.warning("⚠️ Multi-GPU mode requires at least 2 GPUs, automatically disabling multi-GPU")
             self.enabled = False
         
-        if self.gradient_aggregation not in ["mean", "sum", "weighted_mean", "median"]:
-            raise ValueError(f"Invalid gradient aggregation method: {self.gradient_aggregation}")
+        if self.ddp_backend not in ["nccl", "gloo", "mpi"]:
+            raise ValueError(f"Invalid DDP backend: {self.ddp_backend}")
         
-        if self.batch_sharding_strategy not in ["uniform", "adaptive", "weighted"]:
-            raise ValueError(f"Invalid batch slicing strategy: {self.batch_sharding_strategy}")
+        if self.num_gpus > 1 and not torch.cuda.is_available():
+            raise ValueError("CUDA is required for multi-GPU training")
         
         if not 0 < self.memory_warning_threshold < self.memory_critical_threshold < 1:
             raise ValueError("Invalid memory threshold settings")

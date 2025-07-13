@@ -192,7 +192,7 @@ class TrainingHooks:
     
     def _execute_multi_gpu_training(self, trainer, num_gpus: int, original_func) -> Dict[str, Any]:
         """
-        Execute core logic of multi-GPU training
+        Execute core logic of multi-GPU training using new DDP implementation
         
         Args:
             trainer: Original trainer object
@@ -202,75 +202,68 @@ class TrainingHooks:
         Returns:
             Dict: Training result statistics
         """
-        logger.info(f"🔄 Initializing multi-GPU training components...")
+        logger.info(f"🔄 Initializing DDP multi-GPU training components...")
         
         # Collect all error information instead of immediately falling back
         errors = []
         
-        # Import core components and configuration
-        from .. import get_active_config
-        from ..core import MultiGPUTrainer
-        from ..utils import MultiGPUConfig
+        try:
+            # Import DDP components
+            from .. import get_active_config
+            from ..core import launch_ddp_training
+            from ..utils import MultiGPUConfig
 
-        # Get active configuration
-        active_config = get_active_config()
-        if not active_config:
-            error_msg = "❌ No active multi-GPU configuration found. Please ensure enable_multi_gpu() function is called"
-            errors.append(error_msg)
-            logger.error(error_msg)
-            return self._handle_fallback_with_details(trainer, original_func, errors)
-
-        # Handle configuration type compatibility
-        config_obj = None
-        if isinstance(active_config, dict):
-            try:
-                config_obj = MultiGPUConfig(**active_config)
-            except Exception as e:
-                error_msg = f"❌ Configuration object conversion failed: {e}. Configuration content: {active_config}"
+            # Get active configuration
+            active_config = get_active_config()
+            if not active_config:
+                error_msg = "❌ No active multi-GPU configuration found. Please ensure enable_multi_gpu() function is called"
                 errors.append(error_msg)
                 logger.error(error_msg)
-        elif isinstance(active_config, MultiGPUConfig):
-            config_obj = active_config
-        else:
-            error_msg = f"❌ Unknown configuration type: {type(active_config)}. Expected MultiGPUConfig or dict"
-            errors.append(error_msg)
-            logger.error(error_msg)
-        
-        if config_obj is None:
-            return self._handle_fallback_with_details(trainer, original_func, errors)
-        
-        # Check if there is training data
-        if not hasattr(trainer, 'train_dataset') or not trainer.train_dataset:
-            error_msg = "⚠️ No training data found. trainer.train_dataset is empty or does not exist"
-            errors.append(error_msg)
-            logger.warning(error_msg)
-            return self._handle_fallback_with_details(trainer, original_func, errors)
-        
-        # Validate GPU environment
-        gpu_errors = self._validate_gpu_environment(config_obj)
-        if gpu_errors:
-            errors.extend(gpu_errors)
-            return self._handle_fallback_with_details(trainer, original_func, errors)
-        
-        try:
-            # Use configuration object to create multi-GPU trainer
-            logger.info(f"⚙️ Training with configuration: batch_size_per_gpu={config_obj.batch_size_per_gpu}, gradient_aggregation={config_obj.gradient_aggregation}")
+                return self._handle_fallback_with_details(trainer, original_func, errors)
+
+            # Handle configuration type compatibility
+            config_obj = None
+            if isinstance(active_config, dict):
+                try:
+                    config_obj = MultiGPUConfig(**active_config)
+                except Exception as e:
+                    error_msg = f"❌ Configuration object conversion failed: {e}. Configuration content: {active_config}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
+            elif isinstance(active_config, MultiGPUConfig):
+                config_obj = active_config
+            else:
+                error_msg = f"❌ Unknown configuration type: {type(active_config)}. Expected MultiGPUConfig or dict"
+                errors.append(error_msg)
+                logger.error(error_msg)
             
-            multi_gpu_trainer = MultiGPUTrainer(
-                original_trainer=trainer,
-                config=config_obj
-            )
+            if config_obj is None:
+                return self._handle_fallback_with_details(trainer, original_func, errors)
             
-            # Set up trainer
-            multi_gpu_trainer.setup()
+            # Check if there is training data
+            if not hasattr(trainer, 'train_dataset') or not trainer.train_dataset:
+                error_msg = "⚠️ No training data found. trainer.train_dataset is empty or does not exist"
+                errors.append(error_msg)
+                logger.warning(error_msg)
+                return self._handle_fallback_with_details(trainer, original_func, errors)
             
-            logger.info(f"✅ Multi-GPU trainer initialization completed")
+            # Validate GPU environment
+            gpu_errors = self._validate_gpu_environment(config_obj)
+            if gpu_errors:
+                errors.extend(gpu_errors)
+                return self._handle_fallback_with_details(trainer, original_func, errors)
             
-            # Execute training
-            return multi_gpu_trainer.train()
+            # Use new DDP training approach
+            logger.info(f"⚙️ 启动DDP训练: batch_size_per_gpu={config_obj.batch_size_per_gpu}, num_gpus={config_obj.num_gpus}")
+            
+            # Launch DDP training
+            result = launch_ddp_training(trainer, config_obj)
+            
+            logger.info(f"✅ DDP multi-GPU training completed successfully")
+            return result
             
         except Exception as e:
-            error_msg = f"❌ Multi-GPU trainer execution failed: {str(e)}"
+            error_msg = f"❌ DDP multi-GPU training failed: {str(e)}"
             errors.append(error_msg)
             logger.error(error_msg, exc_info=True)
             return self._handle_fallback_with_details(trainer, original_func, errors)
