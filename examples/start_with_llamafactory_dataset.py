@@ -49,7 +49,7 @@ def main():
         num_gpus=2,  # Use 4 GPUs
         debug=True,
         batch_size_per_gpu=batch_size_per_gpu,  # Batch size per GPU
-        gradient_aggregation="mean"  # Gradient aggregation strategy
+        ddp_backend="nccl"  # Use NCCL for GPU communication
     )
     
     model_args = ModelArguments()
@@ -70,6 +70,9 @@ def main():
             lr_scheduler_type = "linear",
             seed = 3407,
             report_to = "none", # Use this for WandB etc
+            dataloader_num_workers=2,
+            dataloader_pin_memory=True,
+            remove_unused_columns=False,
         )
 
     # 👉 Additionally create a HF Seq2SeqTrainingArguments for LlamaFactory data processing

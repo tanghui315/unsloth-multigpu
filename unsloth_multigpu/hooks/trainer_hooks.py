@@ -147,13 +147,13 @@ class TrainerHooks:
     
     def _hook_train(self) -> bool:
         """
-        Hook Trainer.train, make it call self-developed MultiGPUTrainer
+        Hook Trainer.train, make it call real DDP launcher for multi-GPU training
         """
         try:
             from transformers import Trainer
 
             import unsloth_multigpu as uns_mgpu
-            from unsloth_multigpu.core import MultiGPUTrainer
+            from unsloth_multigpu.core import launch_ddp_training
 
             # Save original train method
             original_train = Trainer.train
@@ -164,19 +164,46 @@ class TrainerHooks:
             }
 
             def patched_train(self, *args, **kwargs):
-                """Patched train method, supports multi-GPU"""
+                """Patched train method, supports multi-GPU DDP"""
                 # If multi-GPU is not enabled, fall back to original method
                 if not uns_mgpu.is_multi_gpu_enabled():
                     return original_train(self, *args, **kwargs)
 
-                # If MultiGPUTrainer is not created, initialize
-                if not hasattr(self, '_unsloth_multi_gpu_trainer'):
-                    cfg = uns_mgpu.get_active_config()
-                    self._unsloth_multi_gpu_trainer = MultiGPUTrainer(self, cfg)
-
-                # Call self-developed trainer
-                training_result = self._unsloth_multi_gpu_trainer.train()
-                return training_result
+                # Get active configuration
+                cfg = uns_mgpu.get_active_config()
+                
+                # Check if should use DDP (multi-process training)
+                # Handle both MultiGPUConfig object and dict fallback
+                num_gpus = 1
+                if cfg:
+                    if hasattr(cfg, 'num_gpus'):
+                        num_gpus = cfg.num_gpus
+                    elif isinstance(cfg, dict) and 'num_gpus' in cfg:
+                        num_gpus = cfg['num_gpus']
+                
+                if cfg and num_gpus > 1:
+                    logger.info(f"🚀 Launching real DDP training: {num_gpus} GPUs")
+                    
+                    # Use a simpler solution: check if already in DDP environment
+                    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+                        # Already in DDP environment, use DDP wrapper
+                        logger.info("🔧 Detected DDP environment, training in DDP mode")
+                        return _train_with_ddp_wrapper(self, original_train, *args, **kwargs)
+                    else:
+                        # Not in DDP environment, prompt user to use torchrun
+                        logger.error("❌ Multi-GPU training requires launching with torchrun")
+                        logger.info("💡 Please use the following command to launch:")
+                        logger.info(f"   CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node={num_gpus} your_script.py")
+                        logger.info("")
+                        logger.info("⚠️ GPU memory optimization suggestions:")
+                        logger.info("   1. Use load_in_4bit=True to reduce model memory usage")
+                        logger.info("   2. Reduce batch_size_per_gpu")
+                        logger.info("   3. Enable gradient_checkpointing=True")
+                        raise RuntimeError("Multi-GPU training requires launching with torchrun, please refer to the above command")
+                else:
+                    # Single GPU or fallback
+                    logger.info("🔄 Single GPU mode, using original training")
+                    return original_train(self, *args, **kwargs)
 
             # Replace function
             Trainer.train = patched_train
@@ -188,81 +215,90 @@ class TrainerHooks:
         except Exception as e:
             logger.error(f"❌ Failed to hook train: {e}")
             return False
+
+
+def _train_with_ddp_wrapper(trainer, original_train, *args, **kwargs):
+    """
+    Wrapper function for training in DDP environment
     
-    def _setup_multi_gpu_config(self):
-        """Set multi-GPU configuration for Trainer"""
-        # Add multi-GPU marker
-        self._unsloth_multi_gpu_enabled = True
-        self._unsloth_num_gpus = int(os.environ.get("UNSLOTH_MULTIGPU_NUM_GPUS", "1"))
+    Args:
+        trainer: Trainer instance
+        original_train: Original train function
+        *args, **kwargs: Training parameters
         
-        # Configure multi-GPU related attributes
-        self._unsloth_performance_stats = {
-            'multi_gpu_steps': 0,
-            'total_multi_gpu_time': 0.0,
-            'avg_step_time': 0.0
-        }
+    Returns:
+        Training result
+    """
+    import torch
+    import torch.distributed as dist
+    from torch.nn.parallel import DistributedDataParallel as DDP
+    
+    try:
+        # Initialize DDP process group (if not already initialized)
+        if not dist.is_initialized():
+            dist.init_process_group(backend='nccl')
         
-        logger.info(f"🔧 Trainer multi-GPU configuration completed: {self._unsloth_num_gpus} GPUs")
-    
-    def _should_use_multi_gpu(self) -> bool:
-        """Check if multi-GPU should be used"""
-        return (
-            os.environ.get("UNSLOTH_MULTIGPU_ENABLED") == "1" and
-            hasattr(self, '_unsloth_multi_gpu_enabled') and
-            self._unsloth_multi_gpu_enabled and
-            self._unsloth_num_gpus > 1
-        )
-    
-    def _update_performance_stats(self, duration: float, success: bool):
-        """Update performance statistics"""
-        self.performance_stats['hook_overhead_ms'] += duration * 1000
-        self.performance_stats['total_hook_calls'] += 1
+        rank = dist.get_rank()
+        local_rank = int(os.environ.get('LOCAL_RANK', rank))
+        world_size = dist.get_world_size()
         
-        if success:
-            self.performance_stats['successful_hooks'] += 1
-        else:
-            self.performance_stats['failed_hooks'] += 1
-    
-    def get_hook_status(self) -> Dict[str, Any]:
-        """
-        Get Hook status information
+        logger.info(f"🚀 DDP process started: rank={rank}, local_rank={local_rank}, world_size={world_size}")
         
-        Returns:
-            Dict: Hook status statistics
-        """
-        return {
-            'hooks_applied': self.hooks_applied,
-            'active_hooks': list(self.original_functions.keys()),
-            'num_hooks': len(self.original_functions),
-            'trainer_hooks': ['trainer_init', 'train'],
-            'performance_stats': self.performance_stats
-        }
-    
-    def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance statistics information"""
-        stats = self.performance_stats.copy()
+        # Set CUDA device
+        torch.cuda.set_device(local_rank)
+        device = torch.device(f'cuda:{local_rank}')
         
-        # Calculate average
-        if stats['total_hook_calls'] > 0:
-            stats['avg_hook_overhead_ms'] = stats['hook_overhead_ms'] / stats['total_hook_calls']
-            stats['success_rate'] = stats['successful_hooks'] / stats['total_hook_calls']
-        else:
-            stats['avg_hook_overhead_ms'] = 0.0
-            stats['success_rate'] = 0.0
+        # Move model to corresponding GPU and wrap as DDP
+        if not isinstance(trainer.model, DDP):
+            # GPU memory optimization: clear unnecessary cache
+            if hasattr(torch.cuda, 'empty_cache'):
+                torch.cuda.empty_cache()
+            
+            # Ensure model is on the correct device
+            if trainer.model.device != device:
+                logger.info(f"🔄 Moving model from {trainer.model.device} to {device}")
+                trainer.model = trainer.model.to(device)
+            
+            # Wrap as DDP, enable gradient compression to reduce communication overhead
+            trainer.model = DDP(
+                trainer.model, 
+                device_ids=[local_rank],
+                output_device=local_rank,
+                find_unused_parameters=False,
+                gradient_as_bucket_view=True,  # Reduce memory usage
+                static_graph=True  # Optimize if computation graph is static
+            )
+            logger.info(f"✅ Model wrapped as DDP: device={device}")
+            
+            # GPU memory statistics
+            if torch.cuda.is_available():
+                allocated = torch.cuda.memory_allocated(local_rank) / 1024**3
+                cached = torch.cuda.memory_reserved(local_rank) / 1024**3
+                logger.info(f"📊 GPU {local_rank} memory: allocated={allocated:.2f}GB, cached={cached:.2f}GB")
         
-        return stats
-    
-    def reset_performance_stats(self):
-        """Reset performance statistics"""
-        self.performance_stats = {
-            'hook_overhead_ms': 0.0,
-            'total_hook_calls': 0,
-            'successful_hooks': 0,
-            'failed_hooks': 0
-        }
-        logger.info("🔄 Performance statistics reset")
-    
-    def __del__(self):
-        """Destructor, ensure Hooks are correctly removed"""
-        if self.hooks_applied:
-            self.remove_hooks() 
+        # Set distributed data sampler
+        from torch.utils.data.distributed import DistributedSampler
+        if trainer.train_dataset is not None:
+            # Check if DistributedSampler is already set
+            if not hasattr(trainer, '_ddp_sampler_set'):
+                trainer.args.dataloader_sampler = DistributedSampler(
+                    trainer.train_dataset,
+                    num_replicas=world_size,
+                    rank=rank,
+                    shuffle=True
+                )
+                trainer._ddp_sampler_set = True
+                logger.info("✅ Distributed data sampler set")
+        
+        # Execute original training
+        result = original_train(trainer, *args, **kwargs)
+        
+        if rank == 0:
+            logger.info("✅ DDP training completed")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ DDP training failed: {e}")
+        raise
+

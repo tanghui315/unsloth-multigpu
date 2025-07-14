@@ -48,8 +48,11 @@ pip install wandb
 
 #### 运行示例
 ```bash
-# 使用2个GPU运行快速开始示例
-CUDA_VISIBLE_DEVICES=0,1 python examples/quick_start.py
+# 方式1: 单进程运行（Hook会提示使用torchrun）
+python examples/quick_start.py
+
+# 方式2: 使用torchrun进行真正的DDP训练（推荐）
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 examples/quick_start.py
 ```
 
 #### 代码示例
@@ -63,7 +66,8 @@ from transformers import TrainingArguments
 unsloth_multigpu.enable_multi_gpu(
     num_gpus=2,  # 使用2个GPU
     batch_size_per_gpu=2,  # 每个GPU的批次大小
-    gradient_aggregation="mean"  # 梯度聚合策略
+    ddp_backend="nccl",  # DDP通信后端
+    enable_memory_optimization=True  # 启用内存优化
 )
 
 # 2. 加载模型（自动支持多GPU）
@@ -109,6 +113,27 @@ trainer = SFTTrainer(
 )
 
 trainer_stats = trainer.train()
+```
+
+#### 重要说明：两种运行方式的区别
+
+1. **单进程运行**（`python script.py`）：
+   - Hook检测到多GPU需求，会提示使用torchrun
+   - 显示错误信息和正确的启动命令
+   - 适合测试配置是否正确
+
+2. **torchrun运行**（`torchrun --nproc_per_node=2 script.py`）：
+   - 启动真正的DDP多进程训练
+   - 每个GPU运行一个独立进程
+   - 自动数据分割和梯度同步
+   - 获得真正的性能提升
+
+```bash
+# 如果运行普通命令，会看到类似提示：
+$ python examples/quick_start.py
+❌ 多GPU训练需要使用torchrun启动
+💡 请使用以下命令启动:
+   CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 examples/quick_start.py
 ```
 
 ### 方式2: 直接使用（推荐用于新项目）
@@ -194,10 +219,10 @@ unsloth_multigpu/
 - 自适应分片策略
 - 高效结果收集
 
-### 3. 梯度聚合
-- 多种聚合策略（平均、加权、中位数）
-- 梯度一致性验证
-- 数值稳定性保证
+### 3. DDP训练支持
+- PyTorch原生DDP实现
+- 自动梯度同步
+- 高效的NCCL通信
 
 ### 4. 内存管理
 - 实时内存监控
@@ -245,9 +270,11 @@ python tests/run_all_tests.py --quick
 ## ⚠️ 注意事项
 
 1. **依赖关系**: 确保先安装Unsloth包
-2. **CUDA环境**: 需要CUDA 11.0+支持
+2. **CUDA环境**: 需要CUDA 11.0+支持  
 3. **内存要求**: 建议每个GPU至少8GB显存
 4. **Python版本**: 需要Python 3.8+
+5. **DDP训练**: 多GPU训练需要使用torchrun启动
+6. **显存优化**: 建议使用 `load_in_4bit=True` 减少显存占用
 
 ## 🤝 兼容性
 

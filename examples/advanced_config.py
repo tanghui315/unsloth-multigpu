@@ -42,9 +42,8 @@ def main():
     logger.info("🔄 Enabling multi-GPU support...")
     unsloth_multigpu.enable_multi_gpu(
         **optimal_config,
-        gradient_aggregation="weighted_mean",  # Use weighted mean aggregation
-        memory_efficient=True,  # Enable memory optimization
-        enable_profiling=True   # Enable performance profiling
+        enable_memory_optimization=True,  # Enable memory optimization
+        debug=True   # Enable debug mode for profiling
     )
 
     # 5. Check system status

@@ -1,6 +1,6 @@
 """
-DDP Launcher - 分布式训练启动器
-基于torch.multiprocessing实现多进程DDP训练
+DDP Launcher - Distributed Training Launcher
+Based on torch.multiprocessing for multi-process DDP training
 """
 
 import logging
@@ -21,56 +21,56 @@ logger = logging.getLogger(__name__)
 
 class DDPLauncher:
     """
-    DDP Launcher - 分布式训练启动器
+    DDP Launcher - Distributed Training Launcher
     
-    主要功能：
-    1. 管理多进程训练启动
-    2. 错误处理和进程监控
-    3. 结果收集和汇总
-    4. 资源清理
+    Main functions:
+    1. Manage multi-process training launch
+    2. Error handling and process monitoring
+    3. Result collection and aggregation
+    4. Resource cleanup
     """
     
     def __init__(self, config: MultiGPUConfig):
         """
-        初始化DDP启动器
+        Initialize DDP Launcher
         
         Args:
-            config: 多GPU配置
+            config: Multi-GPU configuration
         """
         self.config = config
         self.processes = []
         self.results = {}
         
-        logger.info(f"🔧 初始化DDPLauncher: {config.num_gpus} GPUs")
+        logger.info(f"🔧 Initializing DDPLauncher: {config.num_gpus} GPUs")
     
     def launch_training(self, 
                        trainer_fn: Callable,
                        trainer_args: tuple = (),
                        trainer_kwargs: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        启动分布式训练
+        Launch distributed training
         
         Args:
-            trainer_fn: 训练函数
-            trainer_args: 训练函数位置参数
-            trainer_kwargs: 训练函数关键字参数
+            trainer_fn: Training function
+            trainer_args: Positional arguments for training function
+            trainer_kwargs: Keyword arguments for training function
             
         Returns:
-            Dict: 训练结果
+            Dict: Training results
         """
         if trainer_kwargs is None:
             trainer_kwargs = {}
             
-        logger.info(f"🚀 启动DDP训练: {self.config.num_gpus} 进程")
+        logger.info(f"🚀 Launching DDP training: {self.config.num_gpus} processes")
         
         try:
-            # 设置DDP环境
+            # Set up DDP environment
             setup_ddp_environment(self.config.num_gpus)
             
-            # 使用spawn方法启动进程（推荐用于CUDA）
+            # Use spawn method to start processes (recommended for CUDA)
             mp.set_start_method('spawn', force=True)
             
-            # 创建进程
+            # Create processes
             processes = []
             for rank in range(self.config.num_gpus):
                 p = Process(
@@ -80,27 +80,27 @@ class DDPLauncher:
                 p.start()
                 processes.append(p)
             
-            # 等待所有进程完成
+            # Wait for all processes to finish
             for p in processes:
                 p.join()
             
-            # 检查进程状态
+            # Check process status
             success_count = 0
             for rank, p in enumerate(processes):
                 if p.exitcode == 0:
                     success_count += 1
                 else:
-                    logger.error(f"❌ 进程 {rank} 退出异常: exit_code={p.exitcode}")
+                    logger.error(f"❌ Process {rank} exited abnormally: exit_code={p.exitcode}")
             
             if success_count == self.config.num_gpus:
-                logger.info("✅ 所有DDP进程成功完成")
+                logger.info("✅ All DDP processes completed successfully")
                 return {'status': 'success', 'num_processes': success_count}
             else:
-                logger.error(f"❌ DDP训练失败: {success_count}/{self.config.num_gpus} 进程成功")
+                logger.error(f"❌ DDP training failed: {success_count}/{self.config.num_gpus} processes succeeded")
                 return {'status': 'failed', 'success_count': success_count}
                 
         except Exception as e:
-            logger.error(f"❌ DDP启动失败: {e}")
+            logger.error(f"❌ DDP launch failed: {e}")
             self._cleanup_processes()
             raise
     
@@ -110,32 +110,32 @@ class DDPLauncher:
                        trainer_args: tuple,
                        trainer_kwargs: Dict[str, Any]):
         """
-        工作进程函数
+        Worker process function
         
         Args:
-            rank: 进程rank
-            trainer_fn: 训练函数
-            trainer_args: 训练函数参数
-            trainer_kwargs: 训练函数关键字参数
+            rank: Process rank
+            trainer_fn: Training function
+            trainer_args: Training function arguments
+            trainer_kwargs: Training function keyword arguments
         """
         try:
-            # 设置进程日志
+            # Set process logger
             process_logger = logging.getLogger(f"ddp_worker_{rank}")
-            process_logger.info(f"🚀 启动DDP工作进程 (rank={rank})")
+            process_logger.info(f"🚀 Starting DDP worker process (rank={rank})")
             
-            # 调用训练函数
+            # Call training function
             result = trainer_fn(rank, *trainer_args, **trainer_kwargs)
             
-            process_logger.info(f"✅ DDP工作进程完成 (rank={rank})")
+            process_logger.info(f"✅ DDP worker process completed (rank={rank})")
             return result
             
         except Exception as e:
-            logger.error(f"❌ DDP工作进程失败 (rank={rank}): {e}")
-            logger.error(f"异常详情:", exc_info=True)
+            logger.error(f"❌ DDP worker process failed (rank={rank}): {e}")
+            logger.error(f"Exception details:", exc_info=True)
             sys.exit(1)
     
     def _cleanup_processes(self):
-        """清理进程资源"""
+        """Clean up process resources"""
         for p in self.processes:
             if p.is_alive():
                 p.terminate()
@@ -144,53 +144,53 @@ class DDPLauncher:
                     p.kill()
         
         self.processes.clear()
-        logger.info("🧹 进程资源清理完成")
+        logger.info("🧹 Process resources cleaned up")
 
 
 def ddp_train_worker(rank: int, 
                     original_trainer,
                     config: MultiGPUConfig) -> Dict[str, Any]:
     """
-    DDP训练工作函数
+    DDP training worker function
     
     Args:
-        rank: 进程rank
-        original_trainer: 原始trainer
-        config: 多GPU配置
+        rank: Process rank
+        original_trainer: Original trainer
+        config: Multi-GPU configuration
         
     Returns:
-        Dict: 训练结果
+        Dict: Training results
     """
     from .ddp_manager import DDPManager
     
     try:
-        # 创建DDP管理器和训练器
+        # Create DDP manager and trainer
         ddp_manager = DDPManager()
         ddp_trainer = DDPTrainer(original_trainer, config, ddp_manager)
         
-        # 设置DDP环境
+        # Set up DDP environment
         ddp_trainer.setup(rank)
         
-        # 执行训练
+        # Run training
         result = ddp_trainer.train()
         
         return result
         
     except Exception as e:
-        logger.error(f"❌ DDP训练工作进程失败 (rank={rank}): {e}")
+        logger.error(f"❌ DDP training worker process failed (rank={rank}): {e}")
         raise
 
 
 def launch_ddp_training(original_trainer, config: MultiGPUConfig) -> Dict[str, Any]:
     """
-    便捷的DDP训练启动函数
+    Convenient DDP training launch function
     
     Args:
-        original_trainer: 原始HuggingFace trainer
-        config: 多GPU配置
+        original_trainer: Original HuggingFace trainer
+        config: Multi-GPU configuration
         
     Returns:
-        Dict: 训练结果
+        Dict: Training results
     """
     launcher = DDPLauncher(config)
     

@@ -254,8 +254,7 @@ class TrainingHooks:
                 return self._handle_fallback_with_details(trainer, original_func, errors)
             
             # Use new DDP training approach
-            logger.info(f"⚙️ 启动DDP训练: batch_size_per_gpu={config_obj.batch_size_per_gpu}, num_gpus={config_obj.num_gpus}")
-            
+            logger.info(f"⚙️ Launching DDP training: batch_size_per_gpu={config_obj.batch_size_per_gpu}, num_gpus={config_obj.num_gpus}")
             # Launch DDP training
             result = launch_ddp_training(trainer, config_obj)
             
@@ -268,7 +267,7 @@ class TrainingHooks:
             logger.error(error_msg, exc_info=True)
             return self._handle_fallback_with_details(trainer, original_func, errors)
     
-    def _validate_gpu_environment(self, config: 'MultiGPUConfig') -> List[str]:
+    def _validate_gpu_environment(self, config) -> List[str]:
         """Validate GPU environment, return error list"""
         import torch
         errors = []

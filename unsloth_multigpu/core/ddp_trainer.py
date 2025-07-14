@@ -1,6 +1,6 @@
 """
-DDP Trainer - 基于PyTorch DDP的分布式训练器
-替换原有的低效串行训练实现
+DDP Trainer - Distributed Data Parallel Trainer based on PyTorch DDP
+Replaces the original inefficient serial training implementation
 """
 
 import logging
@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 
 class DDPTrainer:
     """
-    DDP Trainer - 基于PyTorch原生DDP的高效分布式训练器
+    DDP Trainer - Efficient distributed trainer based on native PyTorch DDP
     
-    主要优势：
-    1. 真正的并行训练（vs 原来的串行）
-    2. 自动梯度同步（vs 手动CPU传输）
-    3. 高效的NCCL通信（vs 低效的聚合）
-    4. 原生PyTorch支持（vs 自制轮子）
+    Main advantages:
+    1. True parallel training (vs original serial)
+    2. Automatic gradient synchronization (vs manual CPU transfer)
+    3. Efficient NCCL communication (vs inefficient aggregation)
+    4. Native PyTorch support (vs custom implementation)
     """
     
     def __init__(self, 
@@ -34,33 +34,33 @@ class DDPTrainer:
                  config: MultiGPUConfig,
                  ddp_manager: Optional[DDPManager] = None):
         """
-        初始化DDP训练器
+        Initialize DDP Trainer
         
         Args:
-            original_trainer: 原始HuggingFace Trainer
-            config: 多GPU配置
-            ddp_manager: DDP管理器，None表示自动创建
+            original_trainer: Original HuggingFace Trainer
+            config: Multi-GPU configuration
+            ddp_manager: DDP manager, None means auto-create
         """
         self.original_trainer = original_trainer
         self.config = config
         self.ddp_manager = ddp_manager or DDPManager()
         
-        # 模型和优化器
+        # Model and optimizer
         self.model = original_trainer.model
         self.ddp_model = None
         self.optimizer = None
         
-        # 数据相关
+        # Data related
         self.train_dataset = original_trainer.train_dataset
         self.data_collator = original_trainer.data_collator
         self.train_dataloader = None
         
-        # 训练状态
+        # Training state
         self.global_step = 0
         self.epoch = 0
         self.is_setup = False
         
-        # 性能统计
+        # Performance stats
         self.stats = {
             'total_train_time': 0.0,
             'total_forward_time': 0.0,
@@ -69,58 +69,58 @@ class DDPTrainer:
             'steps_per_second': 0.0
         }
         
-        logger.info(f"🔧 初始化DDPTrainer: {config.num_gpus} GPUs")
+        logger.info(f"🔧 Initialize DDPTrainer: {config.num_gpus} GPUs")
     
     def setup(self, rank: int):
         """
-        设置DDP训练环境
+        Setup DDP training environment
         
         Args:
-            rank: 当前进程rank
+            rank: Current process rank
         """
         if self.is_setup:
             return
             
-        logger.info(f"🚀 设置DDP训练环境 (rank={rank})...")
+        logger.info(f"🚀 Setting up DDP training environment (rank={rank})...")
         
-        # 1. 初始化DDP进程组
+        # 1. Initialize DDP process group
         success = self.ddp_manager.init_process_group(
             rank=rank,
             world_size=self.config.num_gpus
         )
         if not success:
-            raise RuntimeError(f"DDP进程组初始化失败 (rank={rank})")
+            raise RuntimeError(f"Failed to initialize DDP process group (rank={rank})")
         
-        # 2. 包装模型为DDP
+        # 2. Wrap model with DDP
         self.ddp_model = self.ddp_manager.wrap_model(
             self.model,
             find_unused_parameters=getattr(self.config, 'find_unused_parameters', False)
         )
         
-        # 3. 创建优化器（必须在DDP包装后）
+        # 3. Create optimizer (must be after DDP wrapping)
         self._setup_optimizer()
         
-        # 4. 创建分布式数据加载器
+        # 4. Create distributed dataloader
         self._setup_dataloader()
         
         self.is_setup = True
         
         if self.ddp_manager.is_master:
-            logger.info("✅ DDP训练环境设置完成")
+            logger.info("✅ DDP training environment setup complete")
     
     def _setup_optimizer(self):
-        """设置优化器"""
-        # 从原始trainer提取优化器配置
+        """Setup optimizer"""
+        # Extract optimizer config from original trainer
         training_args = self.original_trainer.args
         
-        # 创建优化器
+        # Create optimizer
         if hasattr(self.original_trainer, 'create_optimizer'):
-            # 使用HuggingFace的优化器创建方法
+            # Use HuggingFace optimizer creation method
             self.original_trainer.model = self.ddp_model
             self.original_trainer.create_optimizer()
             self.optimizer = self.original_trainer.optimizer
         else:
-            # fallback到默认AdamW
+            # Fallback to default AdamW
             self.optimizer = torch.optim.AdamW(
                 self.ddp_model.parameters(),
                 lr=training_args.learning_rate,
@@ -129,17 +129,17 @@ class DDPTrainer:
             )
         
         if self.ddp_manager.is_master:
-            logger.info(f"✅ 优化器设置完成: {type(self.optimizer).__name__}")
+            logger.info(f"✅ Optimizer setup complete: {type(self.optimizer).__name__}")
     
     def _setup_dataloader(self):
-        """设置分布式数据加载器"""
-        # 创建分布式采样器
+        """Setup distributed dataloader"""
+        # Create distributed sampler
         sampler = self.ddp_manager.create_data_sampler(
             self.train_dataset,
             shuffle=True
         )
         
-        # 创建DataLoader
+        # Create DataLoader
         self.train_dataloader = DataLoader(
             self.train_dataset,
             sampler=sampler,
@@ -150,32 +150,32 @@ class DDPTrainer:
         )
         
         if self.ddp_manager.is_master:
-            logger.info(f"✅ 分布式数据加载器设置完成: batch_size={self.config.batch_size_per_gpu}")
+            logger.info(f"✅ Distributed dataloader setup complete: batch_size={self.config.batch_size_per_gpu}")
     
     def train_step(self, batch: Dict[str, torch.Tensor]) -> Dict[str, Any]:
         """
-        执行单步训练
+        Execute one training step
         
         Args:
-            batch: 训练批次数据
+            batch: Training batch data
             
         Returns:
-            Dict: 训练结果统计
+            Dict: Training result statistics
         """
         step_start = time.time()
         
-        # 移动数据到GPU
+        # Move data to GPU
         device = f"cuda:{self.ddp_manager.local_rank}"
         batch = {k: v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v 
                 for k, v in batch.items()}
         
-        # 梯度清零
+        # Zero gradients
         self.optimizer.zero_grad()
         
-        # 前向传播
+        # Forward pass
         forward_start = time.time()
         
-        # 支持混合精度训练
+        # Support mixed precision training
         if getattr(self.config, 'fp16', False):
             with torch.cuda.amp.autocast():
                 outputs = self.ddp_model(**batch)
@@ -186,25 +186,25 @@ class DDPTrainer:
         
         forward_time = time.time() - forward_start
         
-        # 反向传播（DDP自动同步梯度）
+        # Backward pass (DDP automatically synchronizes gradients)
         backward_start = time.time()
         loss.backward()
         backward_time = time.time() - backward_start
         
-        # 梯度裁剪
+        # Gradient clipping
         if getattr(self.config, 'max_grad_norm', None):
             torch.nn.utils.clip_grad_norm_(
                 self.ddp_model.parameters(), 
                 self.config.max_grad_norm
             )
         
-        # 优化器步骤
+        # Optimizer step
         self.optimizer.step()
         
-        # 更新全局步数
+        # Update global step
         self.global_step += 1
         
-        # 统计信息
+        # Statistics
         step_time = time.time() - step_start
         batch_size = batch['input_ids'].size(0)
         
@@ -224,33 +224,33 @@ class DDPTrainer:
     
     def train_epoch(self) -> Dict[str, Any]:
         """
-        训练一个epoch
+        Train one epoch
         
         Returns:
-            Dict: epoch训练统计
+            Dict: Epoch training statistics
         """
         if not self.is_setup:
-            raise RuntimeError("DDP训练器未设置，请先调用setup()")
+            raise RuntimeError("DDPTrainer not set up, please call setup() first")
         
         epoch_start = time.time()
         epoch_loss = 0.0
         num_steps = 0
         
-        # 设置采样器的epoch（确保每个epoch数据顺序不同）
+        # Set sampler epoch (ensure different data order each epoch)
         if hasattr(self.train_dataloader.sampler, 'set_epoch'):
             self.train_dataloader.sampler.set_epoch(self.epoch)
         
         self.ddp_model.train()
         
         if self.ddp_manager.is_master:
-            logger.info(f"🚀 开始训练 epoch {self.epoch}")
+            logger.info(f"🚀 Start training epoch {self.epoch}")
         
         for batch_idx, batch in enumerate(self.train_dataloader):
             step_result = self.train_step(batch)
             epoch_loss += step_result['loss']
             num_steps += 1
             
-            # 定期打印进度（仅主进程）
+            # Periodically print progress (master process only)
             if self.ddp_manager.is_master and batch_idx % 10 == 0:
                 logger.info(
                     f"Epoch {self.epoch}, Step {batch_idx}/{len(self.train_dataloader)}, "
@@ -259,7 +259,7 @@ class DDPTrainer:
                     f"Throughput: {step_result['throughput']:.1f} samples/s"
                 )
         
-        # Epoch统计
+        # Epoch statistics
         epoch_time = time.time() - epoch_start
         avg_loss = epoch_loss / num_steps if num_steps > 0 else 0.0
         
@@ -276,7 +276,7 @@ class DDPTrainer:
         }
         
         if self.ddp_manager.is_master:
-            logger.info(f"✅ Epoch {self.epoch-1} 完成: "
+            logger.info(f"✅ Epoch {self.epoch-1} finished: "
                        f"avg_loss={avg_loss:.4f}, "
                        f"time={epoch_time:.1f}s, "
                        f"steps/s={epoch_stats['steps_per_second']:.1f}")
@@ -285,13 +285,13 @@ class DDPTrainer:
     
     def train(self, num_epochs: Optional[int] = None) -> Dict[str, Any]:
         """
-        执行完整训练
+        Run full training
         
         Args:
-            num_epochs: 训练轮数，None表示使用配置中的值
+            num_epochs: Number of epochs, None means use config value
             
         Returns:
-            Dict: 训练结果统计
+            Dict: Training result statistics
         """
         if num_epochs is None:
             num_epochs = getattr(self.config, 'num_train_epochs', 3)
@@ -300,14 +300,14 @@ class DDPTrainer:
         all_epoch_stats = []
         
         if self.ddp_manager.is_master:
-            logger.info(f"🚀 开始DDP训练: {num_epochs} epochs, {self.config.num_gpus} GPUs")
+            logger.info(f"🚀 Start DDP training: {num_epochs} epochs, {self.config.num_gpus} GPUs")
         
         try:
             for epoch_idx in range(num_epochs):
                 epoch_stats = self.train_epoch()
                 all_epoch_stats.append(epoch_stats)
             
-            # 最终统计
+            # Final statistics
             total_time = time.time() - train_start
             final_stats = {
                 'total_time': total_time,
@@ -320,43 +320,43 @@ class DDPTrainer:
             }
             
             if self.ddp_manager.is_master:
-                logger.info(f"🎉 DDP训练完成! "
-                           f"总时间: {total_time:.1f}s, "
-                           f"总步数: {self.global_step}, "
-                           f"平均速度: {final_stats['avg_steps_per_second']:.1f} steps/s")
+                logger.info(f"🎉 DDP training finished! "
+                           f"Total time: {total_time:.1f}s, "
+                           f"Total steps: {self.global_step}, "
+                           f"Average speed: {final_stats['avg_steps_per_second']:.1f} steps/s")
             
             return final_stats
             
         except Exception as e:
-            logger.error(f"❌ DDP训练过程中出错: {e}")
+            logger.error(f"❌ Error during DDP training: {e}")
             raise
         finally:
-            # 清理资源
+            # Cleanup resources
             self.cleanup()
     
     def cleanup(self):
-        """清理DDP资源"""
+        """Cleanup DDP resources"""
         try:
             self.ddp_manager.cleanup()
             if self.ddp_manager.is_master:
-                logger.info("✅ DDP资源清理完成")
+                logger.info("✅ DDP resources cleanup complete")
         except Exception as e:
-            logger.warning(f"⚠️ DDP清理过程中出现警告: {e}")
+            logger.warning(f"⚠️ Warning during DDP cleanup: {e}")
     
     def get_stats(self) -> Dict[str, Any]:
-        """获取训练统计信息"""
+        """Get training statistics"""
         return {
             'ddp_stats': self.ddp_manager.get_status(),
             'training_stats': self.stats.copy(),
             'config': {
                 'num_gpus': self.config.num_gpus,
                 'batch_size_per_gpu': self.config.batch_size_per_gpu,
-                'gradient_aggregation': self.config.gradient_aggregation
+                'ddp_backend': getattr(self.config, 'ddp_backend', 'nccl')
             }
         }
     
     def __del__(self):
-        """析构函数"""
+        """Destructor"""
         try:
             self.cleanup()
         except:

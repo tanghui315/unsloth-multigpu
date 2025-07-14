@@ -59,8 +59,11 @@ pip install wandb
 
 #### Running Example
 ```bash
-# Run quick start example with 2 GPUs
-CUDA_VISIBLE_DEVICES=0,1 python examples/quick_start.py
+# Method 1: Single process run (Hook will prompt to use torchrun)
+python examples/quick_start.py
+
+# Method 2: Use torchrun for real DDP training (Recommended)
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 examples/quick_start.py
 ```
 
 #### Code Example
@@ -74,7 +77,8 @@ from transformers import TrainingArguments
 ump.enable_multi_gpu(
     num_gpus=2,  # Use 2 GPUs
     batch_size_per_gpu=2,  # Batch size per GPU
-    gradient_aggregation="mean"  # Gradient aggregation strategy
+    ddp_backend="nccl",  # DDP communication backend
+    enable_memory_optimization=True  # Enable memory optimization
 )
 
 # 2. Load model (multi-GPU supported automatically)
@@ -120,6 +124,27 @@ trainer = SFTTrainer(
 )
 
 trainer_stats = trainer.train()
+```
+
+#### Important: Difference Between Two Running Methods
+
+1. **Single Process Run** (`python script.py`):
+   - Hook detects multi-GPU requirement and prompts to use torchrun
+   - Shows error message and correct launch command
+   - Suitable for testing if configuration is correct
+
+2. **Torchrun Execution** (`torchrun --nproc_per_node=2 script.py`):
+   - Launches real DDP multi-process training
+   - Each GPU runs an independent process
+   - Automatic data splitting and gradient synchronization
+   - Achieves real performance improvement
+
+```bash
+# If you run the regular command, you'll see a prompt like:
+$ python examples/quick_start.py
+❌ Multi-GPU training requires launching with torchrun
+💡 Please use the following command to launch:
+   CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 examples/quick_start.py
 ```
 
 ### Method 2: Direct Usage (Recommended for New Projects)
@@ -205,10 +230,10 @@ unsloth_multigpu/
 - Adaptive sharding strategy
 - Efficient result collection
 
-### 3. Gradient Aggregation
-- Multiple aggregation strategies (mean, weighted, median)
-- Gradient consistency verification
-- Numerical stability guarantee
+### 3. DDP Training Support
+- PyTorch native DDP implementation
+- Automatic gradient synchronization
+- Efficient NCCL communication
 
 ### 4. Memory Management
 - Real-time memory monitoring
@@ -259,6 +284,8 @@ See the `examples/` directory for examples:
 2. **CUDA environment**: Requires CUDA 11.0+ support
 3. **Memory requirements**: At least 8GB VRAM per GPU recommended
 4. **Python version**: Python 3.8+ required
+5. **DDP Training**: Multi-GPU training requires launching with torchrun
+6. **Memory Optimization**: Recommend using `load_in_4bit=True` to reduce VRAM usage
 
 ## 🤝 Compatibility
 

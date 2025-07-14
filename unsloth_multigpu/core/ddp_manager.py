@@ -1,6 +1,6 @@
 """
-DDP Manager - PyTorch原生分布式训练管理器
-基于PyTorch DistributedDataParallel实现真正的并行训练
+DDP Manager - Native PyTorch Distributed Training Manager
+Based on PyTorch DistributedDataParallel for true parallel training
 """
 
 import logging
@@ -19,66 +19,66 @@ logger = logging.getLogger(__name__)
 
 class DDPManager:
     """
-    DDP Manager - 基于PyTorch原生DDP的分布式训练管理器
+    DDP Manager - Distributed training manager based on native PyTorch DDP
     
-    主要功能：
-    1. 分布式进程组初始化
-    2. DDP模型包装和管理
-    3. 进程间通信协调
-    4. 错误处理和资源清理
+    Main features:
+    1. Distributed process group initialization
+    2. DDP model wrapping and management
+    3. Inter-process communication coordination
+    4. Error handling and resource cleanup
     """
     
     def __init__(self, backend: str = "nccl", timeout_minutes: int = 30):
         """
-        初始化DDP管理器
+        Initialize DDP manager
         
         Args:
-            backend: 分布式后端，GPU推荐nccl，CPU推荐gloo
-            timeout_minutes: 分布式操作超时时间
+            backend: Distributed backend, recommend 'nccl' for GPU, 'gloo' for CPU
+            timeout_minutes: Timeout for distributed operations
         """
         self.backend = backend
-        self.timeout = timeout_minutes * 60  # 转换为秒
+        self.timeout = timeout_minutes * 60  # Convert to seconds
         
-        # 分布式状态
+        # Distributed state
         self.is_initialized = False
         self.rank = None
         self.local_rank = None
         self.world_size = None
         self.is_master = False
         
-        # DDP模型实例
+        # DDP model instance
         self.ddp_model = None
         self.original_model = None
         
-        logger.info(f"🔧 初始化DDPManager: backend={backend}, timeout={timeout_minutes}min")
+        logger.info(f"🔧 Initializing DDPManager: backend={backend}, timeout={timeout_minutes}min")
     
     def init_process_group(self, rank: int, world_size: int, 
                           master_addr: str = "localhost", 
                           master_port: str = "12355") -> bool:
         """
-        初始化分布式进程组
+        Initialize distributed process group
         
         Args:
-            rank: 当前进程在全局的排名
-            world_size: 总进程数
-            master_addr: 主节点地址
-            master_port: 主节点端口
+            rank: Global rank of current process
+            world_size: Total number of processes
+            master_addr: Master node address
+            master_port: Master node port
             
         Returns:
-            bool: 是否成功初始化
+            bool: Whether initialization succeeded
         """
         try:
-            # 设置环境变量
+            # Set environment variables
             os.environ['MASTER_ADDR'] = master_addr
             os.environ['MASTER_PORT'] = master_port
             os.environ['WORLD_SIZE'] = str(world_size)
             os.environ['RANK'] = str(rank)
             
-            # 计算local_rank（单机多GPU场景）
+            # Calculate local_rank (for single machine multi-GPU)
             local_rank = rank % torch.cuda.device_count()
             os.environ['LOCAL_RANK'] = str(local_rank)
             
-            # 初始化进程组
+            # Initialize process group
             dist.init_process_group(
                 backend=self.backend,
                 rank=rank,
@@ -87,11 +87,11 @@ class DDPManager:
                        torch.distributed.init_process_group.__defaults__[3]
             )
             
-            # 设置CUDA设备
+            # Set CUDA device
             if torch.cuda.is_available():
                 torch.cuda.set_device(local_rank)
             
-            # 更新状态
+            # Update state
             self.rank = rank
             self.local_rank = local_rank
             self.world_size = world_size
@@ -99,12 +99,12 @@ class DDPManager:
             self.is_initialized = True
             
             if self.is_master:
-                logger.info(f"✅ DDP进程组初始化成功: rank={rank}, world_size={world_size}, backend={self.backend}")
+                logger.info(f"✅ DDP process group initialized: rank={rank}, world_size={world_size}, backend={self.backend}")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ DDP进程组初始化失败: {e}")
+            logger.error(f"❌ DDP process group initialization failed: {e}")
             return False
     
     def wrap_model(self, model: torch.nn.Module, 
@@ -112,30 +112,30 @@ class DDPManager:
                    find_unused_parameters: bool = False,
                    broadcast_buffers: bool = True) -> torch.nn.Module:
         """
-        用DDP包装模型
+        Wrap model with DDP
         
         Args:
-            model: 要包装的模型
-            device_ids: 设备ID列表，None表示自动推断
-            find_unused_parameters: 是否查找未使用的参数
-            broadcast_buffers: 是否广播buffer
+            model: Model to wrap
+            device_ids: List of device IDs, None for auto inference
+            find_unused_parameters: Whether to find unused parameters
+            broadcast_buffers: Whether to broadcast buffers
             
         Returns:
-            torch.nn.Module: DDP包装后的模型
+            torch.nn.Module: DDP-wrapped model
         """
         if not self.is_initialized:
-            raise RuntimeError("DDP进程组未初始化，请先调用init_process_group()")
+            raise RuntimeError("DDP process group not initialized, please call init_process_group() first")
         
-        # 移动模型到当前GPU
+        # Move model to current GPU
         if torch.cuda.is_available():
             device = f"cuda:{self.local_rank}"
             model = model.to(device)
         
-        # 自动推断device_ids
+        # Auto infer device_ids
         if device_ids is None and torch.cuda.is_available():
             device_ids = [self.local_rank]
         
-        # 包装模型
+        # Wrap model
         try:
             self.original_model = model
             self.ddp_model = DDP(
@@ -147,24 +147,24 @@ class DDPManager:
             
             if self.is_master:
                 param_count = sum(p.numel() for p in model.parameters())
-                logger.info(f"✅ 模型DDP包装完成: {param_count:,} 参数")
+                logger.info(f"✅ Model wrapped with DDP: {param_count:,} parameters")
             
             return self.ddp_model
             
         except Exception as e:
-            logger.error(f"❌ 模型DDP包装失败: {e}")
+            logger.error(f"❌ Model DDP wrapping failed: {e}")
             raise
     
     def create_data_sampler(self, dataset, shuffle: bool = True):
         """
-        创建分布式数据采样器
+        Create distributed data sampler
         
         Args:
-            dataset: 数据集
-            shuffle: 是否打乱数据
+            dataset: Dataset
+            shuffle: Whether to shuffle data
             
         Returns:
-            DistributedSampler: 分布式采样器
+            DistributedSampler: Distributed data sampler
         """
         from torch.utils.data.distributed import DistributedSampler
         
@@ -178,8 +178,8 @@ class DDPManager:
     @contextmanager
     def no_sync(self):
         """
-        暂停梯度同步的上下文管理器
-        用于梯度累积场景
+        Context manager to pause gradient synchronization
+        Used for gradient accumulation
         """
         if self.ddp_model is not None:
             with self.ddp_model.no_sync():
@@ -188,17 +188,17 @@ class DDPManager:
             yield
     
     def barrier(self):
-        """进程同步屏障"""
+        """Process synchronization barrier"""
         if self.is_initialized:
             dist.barrier()
     
     def all_reduce(self, tensor: torch.Tensor, op=dist.ReduceOp.SUM):
         """
-        跨进程tensor归约操作
+        All-reduce operation across processes
         
         Args:
-            tensor: 要归约的tensor
-            op: 归约操作类型
+            tensor: Tensor to reduce
+            op: Reduction operation type
         """
         if self.is_initialized:
             dist.all_reduce(tensor, op=op)
@@ -206,31 +206,31 @@ class DDPManager:
     
     def broadcast(self, tensor: torch.Tensor, src: int = 0):
         """
-        从源进程广播tensor到所有进程
+        Broadcast tensor from source process to all processes
         
         Args:
-            tensor: 要广播的tensor
-            src: 源进程rank
+            tensor: Tensor to broadcast
+            src: Source process rank
         """
         if self.is_initialized:
             dist.broadcast(tensor, src=src)
         return tensor
     
     def cleanup(self):
-        """清理分布式资源"""
+        """Cleanup distributed resources"""
         try:
             if self.is_initialized:
                 dist.destroy_process_group()
                 self.is_initialized = False
                 
                 if self.is_master:
-                    logger.info("✅ DDP进程组已清理")
+                    logger.info("✅ DDP process group cleaned up")
                     
         except Exception as e:
-            logger.warning(f"⚠️ DDP清理过程中出现警告: {e}")
+            logger.warning(f"⚠️ Warning during DDP cleanup: {e}")
     
     def get_status(self) -> Dict[str, Any]:
-        """获取DDP状态信息"""
+        """Get DDP status information"""
         return {
             'initialized': self.is_initialized,
             'backend': self.backend,
@@ -244,13 +244,13 @@ class DDPManager:
         }
     
     def __del__(self):
-        """析构函数，确保资源被清理"""
+        """Destructor to ensure resources are cleaned up"""
         if self.is_initialized:
             self.cleanup()
 
 
 def find_free_port() -> str:
-    """寻找空闲端口"""
+    """Find a free port"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(('', 0))
         return str(s.getsockname()[1])
@@ -260,15 +260,15 @@ def setup_ddp_environment(num_gpus: int,
                          master_addr: str = "localhost",
                          master_port: Optional[str] = None) -> Dict[str, str]:
     """
-    设置DDP环境变量
+    Set DDP environment variables
     
     Args:
-        num_gpus: GPU数量
-        master_addr: 主节点地址
-        master_port: 主节点端口，None表示自动寻找
+        num_gpus: Number of GPUs
+        master_addr: Master node address
+        master_port: Master node port, None for auto finding
         
     Returns:
-        Dict: 环境变量字典
+        Dict: Environment variable dictionary
     """
     if master_port is None:
         master_port = find_free_port()
@@ -277,13 +277,13 @@ def setup_ddp_environment(num_gpus: int,
         'MASTER_ADDR': master_addr,
         'MASTER_PORT': master_port,
         'WORLD_SIZE': str(num_gpus),
-        'NCCL_DEBUG': 'INFO',  # 调试信息
+        'NCCL_DEBUG': 'INFO',  # Debug info
         'CUDA_VISIBLE_DEVICES': ','.join(str(i) for i in range(num_gpus))
     }
     
-    # 设置环境变量
+    # Set environment variables
     for key, value in env_vars.items():
         os.environ[key] = value
     
-    logger.info(f"🔧 DDP环境变量设置完成: {env_vars}")
+    logger.info(f"🔧 DDP environment variables set: {env_vars}")
     return env_vars

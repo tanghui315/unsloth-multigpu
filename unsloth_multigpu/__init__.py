@@ -108,7 +108,6 @@ def enable_multi_gpu(
             _ACTIVE_CONFIG = {
                 'num_gpus': num_gpus,
                 'batch_size_per_gpu': batch_size_per_gpu,
-                'gradient_aggregation': gradient_aggregation,
                 'memory_optimization': enable_memory_optimization,
                 'enable_gradient_checkpointing': enable_gradient_checkpointing,
                 'debug': debug
@@ -132,7 +131,7 @@ def enable_multi_gpu(
         
         print(f"🚀 Unsloth Multi-GPU enabled: {num_gpus} GPUs")
         print(f"📊 Batch size per GPU: {batch_size_per_gpu}")
-        print(f"🔀 Gradient aggregation: {gradient_aggregation}")
+        print(f"🔧 DDP backend: {ddp_backend}")
         
     except Exception as e:
         logger.error(f"Failed to enable Multi-GPU: {e}")

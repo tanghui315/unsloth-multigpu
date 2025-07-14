@@ -143,9 +143,42 @@ class LoaderHooks:
         
         logger.info(f"🔄 Loading model: enable_multi_gpu={enable_multi_gpu}, num_gpus={num_gpus}")
         
+        # 🔧 DDP environment detection and device setup
+        if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+            import torch
+            rank = int(os.environ.get('RANK', 0))
+            local_rank = int(os.environ.get('LOCAL_RANK', rank))
+            world_size = int(os.environ.get('WORLD_SIZE', 1))
+            
+            logger.info(f"🚀 Detected DDP environment: rank={rank}, local_rank={local_rank}, world_size={world_size}")
+            
+            # Set correct CUDA device before model loading
+            if torch.cuda.is_available() and local_rank < torch.cuda.device_count():
+                torch.cuda.set_device(local_rank)
+                logger.info(f"✅ Set CUDA device: GPU {local_rank}")
+                
+                # Ensure model loads to the correct device
+                if 'device_map' not in kwargs:
+                    kwargs['device_map'] = f'cuda:{local_rank}'
+                    logger.info(f"🎯 Force model loading to cuda:{local_rank}")
+                
+                # Clear CUDA memory cache
+                torch.cuda.empty_cache()
+            else:
+                logger.warning(f"⚠️ Unable to set CUDA device {local_rank}")
+        
         try:
             # Call original loading function
             model, tokenizer = original_func(*args, **kwargs)
+            
+            # GPU memory usage monitoring
+            if 'RANK' in os.environ and torch.cuda.is_available():
+                import torch
+                rank = int(os.environ.get('RANK', 0))
+                local_rank = int(os.environ.get('LOCAL_RANK', rank))
+                allocated = torch.cuda.memory_allocated(local_rank) / 1024**3
+                cached = torch.cuda.memory_reserved(local_rank) / 1024**3
+                logger.info(f"📊 Rank {rank} GPU {local_rank} memory after model loading: {allocated:.2f}GB (allocated), {cached:.2f}GB (cached)")
             
             # If multi-GPU is enabled, configure model
             if enable_multi_gpu and num_gpus > 1:
@@ -260,10 +293,10 @@ class LoaderHooks:
     
     def get_hook_status(self) -> Dict[str, Any]:
         """
-        获取Hook状态信息
+        Get Hook status information
         
         Returns:
-            Dict: Hook状态统计
+            Dict: Hook status statistics
         """
         return {
             'hooks_applied': self.hooks_applied,
@@ -274,13 +307,13 @@ class LoaderHooks:
     
     def get_model_multi_gpu_info(self, model) -> Optional[Dict[str, Any]]:
         """
-        获取模型的多GPU配置信息
+        Get model multi-GPU configuration information
         
         Args:
-            model: 模型对象
+            model: Model object
             
         Returns:
-            Dict: 多GPU配置信息，如果不支持则返回None
+            Dict: Multi-GPU configuration info, or None if not supported
         """
         if not hasattr(model, '_unsloth_multi_gpu_enabled'):
             return None
@@ -296,6 +329,6 @@ class LoaderHooks:
         }
     
     def __del__(self):
-        """析构函数，确保Hook被正确移除"""
+        """Destructor, ensure Hooks are properly removed"""
         if self.hooks_applied:
             self.remove_hooks() 
