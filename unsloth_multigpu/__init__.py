@@ -27,7 +27,10 @@ except ImportError as e:
     logging.warning(f"Failed to import hook components: {e}")
 
 __version__ = "1.0.0"
-__all__ = ["enable_multi_gpu", "disable_multi_gpu", "is_multi_gpu_enabled", "get_multi_gpu_status", "get_active_config"]
+__all__ = [
+    "enable_multi_gpu", "disable_multi_gpu", "is_multi_gpu_enabled", "get_multi_gpu_status", "get_active_config",
+    "enable_selekt", "disable_selekt", "get_selekt_status"
+]
 
 # Global state flags
 _MULTIGPU_ENABLED = False
@@ -342,3 +345,23 @@ if __name__ != "__main__":
                 logger.warning("⚠️ Modular hook system not available")
     except ImportError:
         pass 
+
+# Import SeleKT functionality
+try:
+    from .hooks.selekt_hooks import enable_selekt, disable_selekt, get_selekt_status
+    SELEKT_AVAILABLE = True
+    logger.info("✅ SeleKT algorithm support loaded")
+except ImportError as e:
+    SELEKT_AVAILABLE = False
+    logger.warning(f"⚠️ SeleKT not available: {e}")
+    
+    # Provide dummy functions if SeleKT is not available
+    def enable_selekt(*args, **kwargs):
+        logger.error("❌ SeleKT not available. Install required dependencies.")
+        return False
+    
+    def disable_selekt():
+        return True
+    
+    def get_selekt_status():
+        return {"selekt_available": False, "error": "SeleKT dependencies not installed"}
