@@ -8,7 +8,10 @@ import os
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+# Import DDP-aware logging
+from ..utils.ddp_logging import get_ddp_logger
+
+logger = get_ddp_logger(__name__)
 
 
 class TrainerHooks:
@@ -242,7 +245,8 @@ def _train_with_ddp_wrapper(trainer, original_train, *args, **kwargs):
         local_rank = int(os.environ.get('LOCAL_RANK', rank))
         world_size = dist.get_world_size()
         
-        logger.info(f"🚀 DDP process started: rank={rank}, local_rank={local_rank}, world_size={world_size}")
+        logger.info_rank0(f"🚀 DDP training started: {world_size} processes")
+        logger.info_all_ranks(f"Process started (local GPU {local_rank})")
         
         # Set CUDA device
         torch.cuda.set_device(local_rank)
@@ -256,7 +260,7 @@ def _train_with_ddp_wrapper(trainer, original_train, *args, **kwargs):
             
             # Ensure model is on the correct device
             if trainer.model.device != device:
-                logger.info(f"🔄 Moving model from {trainer.model.device} to {device}")
+                logger.info_rank0(f"🔄 Moving model to target devices")
                 trainer.model = trainer.model.to(device)
             
             # Wrap as DDP, enable gradient compression to reduce communication overhead
@@ -268,37 +272,43 @@ def _train_with_ddp_wrapper(trainer, original_train, *args, **kwargs):
                 gradient_as_bucket_view=True,  # Reduce memory usage
                 static_graph=True  # Optimize if computation graph is static
             )
-            logger.info(f"✅ Model wrapped as DDP: device={device}")
+            logger.info_rank0(f"✅ Models wrapped as DDP across {world_size} GPUs")
             
             # GPU memory statistics
             if torch.cuda.is_available():
                 allocated = torch.cuda.memory_allocated(local_rank) / 1024**3
                 cached = torch.cuda.memory_reserved(local_rank) / 1024**3
-                logger.info(f"📊 GPU {local_rank} memory: allocated={allocated:.2f}GB, cached={cached:.2f}GB")
+                logger.info_rank0(f"📊 Memory per GPU: ~{allocated:.2f}GB allocated, {cached:.2f}GB cached")
+                logger.info_rank0(f"📊 Total DDP memory: ~{allocated * world_size:.2f}GB across {world_size} GPUs")
         
         # Set distributed data sampler
         from torch.utils.data.distributed import DistributedSampler
         if trainer.train_dataset is not None:
             # Check if DistributedSampler is already set
             if not hasattr(trainer, '_ddp_sampler_set'):
-                trainer.args.dataloader_sampler = DistributedSampler(
+                total_samples = len(trainer.train_dataset)
+                sampler = DistributedSampler(
                     trainer.train_dataset,
                     num_replicas=world_size,
                     rank=rank,
                     shuffle=True
                 )
+                trainer.args.dataloader_sampler = sampler
                 trainer._ddp_sampler_set = True
-                logger.info("✅ Distributed data sampler set")
+                
+                # Log data split info
+                logger.info_rank0("✅ Distributed data sampler configured")
+                logger.info_rank0(f"📊 Total samples: {total_samples}, samples per GPU: ~{len(sampler)}")
+                logger.info_all_ranks(f"Will process ~{len(sampler)} samples per epoch")
         
         # Execute original training
         result = original_train(trainer, *args, **kwargs)
         
-        if rank == 0:
-            logger.info("✅ DDP training completed")
+        logger.info_rank0("✅ DDP training completed successfully")
         
         return result
         
     except Exception as e:
-        logger.error(f"❌ DDP training failed: {e}")
+        logger.error_rank0(f"❌ DDP training failed: {e}")
         raise
 

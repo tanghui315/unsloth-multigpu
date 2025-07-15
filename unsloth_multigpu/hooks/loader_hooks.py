@@ -7,7 +7,10 @@ import logging
 import os
 from typing import Any, Dict, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+# Import DDP-aware logging
+from ..utils.ddp_logging import get_ddp_logger
+
+logger = get_ddp_logger(__name__)
 
 
 class LoaderHooks:
@@ -150,22 +153,23 @@ class LoaderHooks:
             local_rank = int(os.environ.get('LOCAL_RANK', rank))
             world_size = int(os.environ.get('WORLD_SIZE', 1))
             
-            logger.info(f"🚀 Detected DDP environment: rank={rank}, local_rank={local_rank}, world_size={world_size}")
+            logger.info_rank0(f"🚀 DDP environment detected: {world_size} processes")
+            logger.info_all_ranks(f"Setting up model loading (GPU {local_rank})")
             
             # Set correct CUDA device before model loading
             if torch.cuda.is_available() and local_rank < torch.cuda.device_count():
                 torch.cuda.set_device(local_rank)
-                logger.info(f"✅ Set CUDA device: GPU {local_rank}")
+                logger.info_all_ranks(f"CUDA device set to GPU {local_rank}")
                 
                 # Ensure model loads to the correct device
                 if 'device_map' not in kwargs:
                     kwargs['device_map'] = f'cuda:{local_rank}'
-                    logger.info(f"🎯 Force model loading to cuda:{local_rank}")
+                    logger.info_rank0(f"🎯 Force model loading to individual GPUs")
                 
                 # Clear CUDA memory cache
                 torch.cuda.empty_cache()
             else:
-                logger.warning(f"⚠️ Unable to set CUDA device {local_rank}")
+                logger.warning_rank0(f"⚠️ Unable to set CUDA device {local_rank}")
         
         try:
             # Call original loading function
@@ -176,9 +180,10 @@ class LoaderHooks:
                 import torch
                 rank = int(os.environ.get('RANK', 0))
                 local_rank = int(os.environ.get('LOCAL_RANK', rank))
+                world_size = int(os.environ.get('WORLD_SIZE', 1))
                 allocated = torch.cuda.memory_allocated(local_rank) / 1024**3
                 cached = torch.cuda.memory_reserved(local_rank) / 1024**3
-                logger.info(f"📊 Rank {rank} GPU {local_rank} memory after model loading: {allocated:.2f}GB (allocated), {cached:.2f}GB (cached)")
+                logger.info_rank0(f"📊 Model loaded: ~{allocated:.2f}GB per GPU, ~{allocated * world_size:.2f}GB total")
             
             # If multi-GPU is enabled, configure model
             if enable_multi_gpu and num_gpus > 1:
