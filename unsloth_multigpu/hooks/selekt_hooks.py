@@ -37,10 +37,48 @@ class SeleKTTrainerCallback(TrainerCallback):
         if model is not None:
             logger.info_rank0(f"Applying SeleKT to LoRA parameters at step {state.global_step}")
             
-            # Apply SeleKT to LoRA parameters
+            # Apply SeleKT to LoRA parameters with step information
             self.selekt_callback.on_save(
                 model=model,
-                save_path=f"{args.output_dir}/checkpoint-{state.global_step}"
+                save_path=f"{args.output_dir}/checkpoint-{state.global_step}",
+                current_step=state.global_step
+            )
+            
+        return control
+    
+    def on_step_end(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        model=None,
+        **kwargs
+    ):
+        """Check for step-based SeleKT application"""
+        if model is not None and self.config.step_frequency is not None:
+            # Apply SeleKT based on step frequency
+            self.selekt_callback.on_step(
+                model=model,
+                current_step=state.global_step
+            )
+            
+        return control
+
+    def on_epoch_end(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        model=None,
+        **kwargs
+    ):
+        """Apply SeleKT at the end of epoch"""
+        if model is not None and self.config.epoch_frequency is not None:
+            # Apply SeleKT based on epoch frequency
+            self.selekt_callback.on_epoch_end(
+                model=model,
+                current_epoch=state.epoch,
+                current_step=state.global_step
             )
             
         return control
@@ -61,7 +99,10 @@ class SeleKTHooks:
         alpha: float = 0.05,
         apply_on_save: bool = True,
         save_selekt_checkpoints: bool = True,
-        apply_frequency: int = 1
+        apply_frequency: int = 1,
+        step_frequency: Optional[int] = None,
+        max_interval_steps: Optional[int] = None,
+        epoch_frequency: Optional[int] = None
     ) -> bool:
         """
         Enable SeleKT algorithm integration for LoRA parameters
@@ -71,6 +112,9 @@ class SeleKTHooks:
             apply_on_save: Whether to apply SeleKT when saving checkpoints
             save_selekt_checkpoints: Whether to save SeleKT-processed checkpoints
             apply_frequency: Apply SeleKT every N saves
+            step_frequency: Apply SeleKT every N steps (independent of saves)
+            max_interval_steps: Maximum steps between SeleKT applications
+            epoch_frequency: Apply SeleKT every N epochs (recommended approach)
             
         Returns:
             bool: Whether SeleKT was successfully enabled
@@ -81,10 +125,19 @@ class SeleKTHooks:
                 enabled=True,
                 apply_on_save=apply_on_save,
                 save_selekt_checkpoints=save_selekt_checkpoints,
-                apply_frequency=apply_frequency
+                apply_frequency=apply_frequency,
+                step_frequency=step_frequency,
+                max_interval_steps=max_interval_steps,
+                epoch_frequency=epoch_frequency
             )
             
-            logger.info_rank0(f"✅ SeleKT enabled for LoRA parameters: α={alpha}")
+            config_info = f"α={alpha}"
+            if step_frequency:
+                config_info += f", step_freq={step_frequency}"
+            if max_interval_steps:
+                config_info += f", max_interval={max_interval_steps}"
+                
+            logger.info_rank0(f"✅ SeleKT enabled for LoRA parameters: {config_info}")
             return True
             
         except Exception as e:
@@ -181,7 +234,10 @@ def enable_selekt(
     alpha: float = 0.05,
     apply_on_save: bool = True,
     save_selekt_checkpoints: bool = True,
-    apply_frequency: int = 1
+    apply_frequency: int = 1,
+    step_frequency: Optional[int] = None,
+    max_interval_steps: Optional[int] = None,
+    epoch_frequency: Optional[int] = None
 ) -> bool:
     """
     Global function to enable SeleKT algorithm for LoRA parameters
@@ -202,7 +258,10 @@ def enable_selekt(
         alpha=alpha,
         apply_on_save=apply_on_save,
         save_selekt_checkpoints=save_selekt_checkpoints,
-        apply_frequency=apply_frequency
+        apply_frequency=apply_frequency,
+        step_frequency=step_frequency,
+        max_interval_steps=max_interval_steps,
+        epoch_frequency=epoch_frequency
     )
 
 
