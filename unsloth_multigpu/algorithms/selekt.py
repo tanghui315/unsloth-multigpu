@@ -28,7 +28,6 @@ class SeleKTConfig:
         apply_on_save: bool = True,
         apply_frequency: int = 1,  # Apply every N saves
         memory_efficient: bool = True,
-        # 多种触发方式
         step_frequency: Optional[int] = None,  # Apply every N steps (independent of saves)
         max_interval_steps: Optional[int] = None,  # Maximum steps between applications
         epoch_frequency: Optional[int] = None,  # Apply every N epochs (recommended)
@@ -171,28 +170,28 @@ class SeleKTCallback:
             
         self.save_count += 1
         
-        # 检查是否应该基于保存频率应用
+        # Check whether to apply based on save frequency
         should_apply_by_save = self.save_count % self.config.apply_frequency == 0
         
-        # 检查是否应该基于步数频率应用
+        # Check whether to apply based on step frequency
         should_apply_by_step = False
         if current_step is not None and self.config.step_frequency is not None:
             steps_since_last = current_step - self.last_applied_step
             should_apply_by_step = steps_since_last >= self.config.step_frequency
         
-        # 检查是否超过最大间隔
+        # Check whether to apply based on max interval
         should_apply_by_max_interval = False
         if current_step is not None and self.config.max_interval_steps is not None:
             steps_since_last = current_step - self.last_applied_step
             should_apply_by_max_interval = steps_since_last >= self.config.max_interval_steps
         
-        # 决定是否应用SeleKT
+        # Decide whether to apply SeleKT
         should_apply = should_apply_by_save or should_apply_by_step or should_apply_by_max_interval
         
         if not should_apply:
             return model
             
-        # 记录触发原因
+        # Record trigger reasons
         reasons = []
         if should_apply_by_save:
             reasons.append(f"save_frequency({self.config.apply_frequency})")
@@ -207,7 +206,7 @@ class SeleKTCallback:
         # Apply SeleKT to LoRA parameters
         selekt_model = self.processor.apply_selekt(model)
         
-        # 更新应用记录
+        # Update application record
         if current_step is not None:
             self.last_applied_step = current_step
         self.last_applied_save = self.save_count
@@ -226,10 +225,10 @@ class SeleKTCallback:
             
         steps_since_last = current_step - self.last_applied_step
         
-        # 检查是否应该基于步数应用
+        # Check whether to apply based on step frequency
         should_apply_by_step = steps_since_last >= self.config.step_frequency
         
-        # 检查是否超过最大间隔
+        # Check whether to apply based on max interval
         should_apply_by_max_interval = False
         if self.config.max_interval_steps is not None:
             should_apply_by_max_interval = steps_since_last >= self.config.max_interval_steps
@@ -237,7 +236,7 @@ class SeleKTCallback:
         if not (should_apply_by_step or should_apply_by_max_interval):
             return model
             
-        # 记录触发原因
+        # Record trigger reasons
         reasons = []
         if should_apply_by_step:
             reasons.append(f"step_frequency({self.config.step_frequency})")
@@ -250,11 +249,10 @@ class SeleKTCallback:
         # Apply SeleKT to LoRA parameters
         selekt_model = self.processor.apply_selekt(model)
         
-        # 更新应用记录
+        # Update application record
         self.last_applied_step = current_step
         
         return selekt_model
-    
     def _save_selekt_checkpoint(self, model: torch.nn.Module, path: str):
         """Save SeleKT processed model"""
         try:

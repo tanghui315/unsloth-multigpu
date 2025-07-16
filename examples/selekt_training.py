@@ -220,50 +220,49 @@ def advanced_selekt_config():
     
     print(f"Large save_steps solution: {large_save_steps_config.__dict__}")
     
-    # 配置3：纯步数触发模式
+    # Config 3: Step-only trigger mode
     step_only_config = create_selekt_config(
         alpha=0.05,
-        apply_on_save=False,  # 不在保存时应用
+        apply_on_save=False,  # Do not apply on save
         save_selekt_checkpoints=False,
-        step_frequency=1500,  # 每1500步应用一次
+        step_frequency=1500,  # Apply every 1500 steps
         memory_efficient=True
     )
     
     print(f"Step-only trigger config: {step_only_config.__dict__}")
     
-    # 配置4：最大间隔保护
+    # Config 4: Max interval protection
     max_interval_config = create_selekt_config(
         alpha=0.05,
         apply_on_save=True,
         save_selekt_checkpoints=True,
-        apply_frequency=5,  # 每5次保存应用一次
-        max_interval_steps=3000,  # 但最多3000步必须应用一次
+        apply_frequency=5,  # Apply every 5 saves
+        max_interval_steps=3000,  # But must apply at least every 3000 steps
         memory_efficient=True
     )
     
     print(f"Max interval protection: {max_interval_config.__dict__}")
     
-    # 配置5：Epoch-based 触发（推荐）
+    # Config 5: Epoch-based trigger (recommended)
     epoch_based_config = create_selekt_config(
         alpha=0.05,
-        epoch_frequency=1,           # 每个epoch结束时应用
-        apply_on_save=False,         # 不在保存时重复应用
+        epoch_frequency=1,           # Apply at the end of every epoch
+        apply_on_save=False,         # Do not apply again on save
         save_selekt_checkpoints=True,
         memory_efficient=True
     )
     
     print(f"Epoch-based trigger config: {epoch_based_config.__dict__}")
     
-    # 配置6：混合 Epoch + 安全间隔
+    # Config 6: Hybrid Epoch + Safety interval
     hybrid_epoch_config = create_selekt_config(
         alpha=0.05,
-        epoch_frequency=1,           # 每个epoch结束时应用
-        max_interval_steps=2000,     # 安全网：最多2000步必须应用
-        apply_on_save=True,          # 保存时也应用
+        epoch_frequency=1,           # Apply at the end of every epoch
+        max_interval_steps=2000,     # Safety net: must apply at least every 2000 steps
+        apply_on_save=True,          # Also apply on save
         save_selekt_checkpoints=True,
         memory_efficient=True
     )
-    
     print(f"Hybrid epoch + safety config: {hybrid_epoch_config.__dict__}")
 
 def solve_large_save_steps_problem():
