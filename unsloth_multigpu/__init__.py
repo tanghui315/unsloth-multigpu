@@ -29,7 +29,8 @@ except ImportError as e:
 __version__ = "1.0.0"
 __all__ = [
     "enable_multi_gpu", "disable_multi_gpu", "is_multi_gpu_enabled", "get_multi_gpu_status", "get_active_config",
-    "enable_selekt", "disable_selekt", "get_selekt_status"
+    "enable_selekt", "disable_selekt", "get_selekt_status",
+    "enable_grpo_support", "disable_grpo_support", "get_grpo_status"
 ]
 
 # Global state flags
@@ -365,3 +366,23 @@ except ImportError as e:
     
     def get_selekt_status():
         return {"selekt_available": False, "error": "SeleKT dependencies not installed"}
+
+# Import GRPO functionality
+try:
+    from .hooks.grpo_hooks import enable_grpo_support, disable_grpo_support, get_grpo_status
+    GRPO_AVAILABLE = True
+    logger.info("✅ GRPO (Generalized Reinforcement Learning) support loaded")
+except ImportError as e:
+    GRPO_AVAILABLE = False
+    logger.warning(f"⚠️ GRPO not available: {e}")
+    
+    # Provide dummy functions if GRPO is not available
+    def enable_grpo_support(*args, **kwargs):
+        logger.error("❌ GRPO not available. Install required dependencies (TRL).")
+        return False
+    
+    def disable_grpo_support():
+        return True
+    
+    def get_grpo_status():
+        return {"grpo_available": False, "error": "GRPO dependencies not installed"}
