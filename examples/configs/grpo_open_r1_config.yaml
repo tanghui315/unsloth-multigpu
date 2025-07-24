@@ -1,0 +1,63 @@
+# GRPO Training Configuration for unsloth-multigpu + open-r1
+# This config is compatible with open-r1's configuration format
+
+# Model arguments
+model_name_or_path: Qwen/Qwen2.5-32B-Instruct  # Base model path or HF model name
+torch_dtype: bfloat16                           # Model precision (auto, float16, bfloat16)
+attn_implementation: flash_attention_2          # Attention implementation
+lora_r: 16                                      # LoRA rank
+model_revision: main                            # Model revision
+trust_remote_code: false                       # Trust remote code
+
+# Dataset arguments (open-r1 compatible)
+dataset_name: data/grpo_data.jsonl
+dataset_num_proc: 16
+
+reward_funcs:
+  - accuracy
+  - format
+  - reasoning_steps
+  - cosine
+  - repetition_penalty
+  - length    # Response length reward (open-r1)
+
+# GRPO Training arguments
+use_vllm: true                    # Use vLLM for fast inference (requires vLLM setup)
+vllm_server_host: 127.0.0.1       # vLLM server host (if use_vllm=true)
+vllm_server_port: 8000            # vLLM server port (if use_vllm=true)
+vllm_max_model_len: 8192          # vLLM max model length
+
+# Training configuration
+optim: adamw_8bit
+
+bf16: true
+do_eval: true
+eval_strategy: 'no'
+gradient_accumulation_steps: 4
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+num_generations: 8
+learning_rate: 5.0e-06
+log_level: info
+logging_steps: 5
+logging_strategy: steps
+lr_scheduler_type: cosine_with_min_lr
+lr_scheduler_kwargs:
+  min_lr_rate: 0.1
+packing: true
+max_length: 8192
+max_steps: -1
+num_train_epochs: 2
+output_dir: ./think/output_dir
+overwrite_output_dir: true
+per_device_eval_batch_size: 32
+per_device_train_batch_size: 32
+report_to:
+- none
+save_strategy: "steps"
+save_steps: 200
+save_total_limit: 1
+seed: 42
+use_liger_kernel: true
+warmup_ratio: 0.05

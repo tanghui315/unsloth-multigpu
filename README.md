@@ -126,6 +126,117 @@ trainer = SFTTrainer(
 trainer_stats = trainer.train()
 ```
 
+### Method 3: GRPO Reinforcement Learning Training (Multi-GPU Support)
+
+GRPO (Generalized Reinforcement Learning from Policy Optimization) is an advanced reinforcement learning training method with multi-GPU parallel training support.
+
+#### Complete GRPO Training Steps
+
+**Step 1: Start vLLM Inference Service** (if using vLLM inference)
+```bash
+# Start vLLM service for fast inference (run in separate terminal)
+CUDA_VISIBLE_DEVICES=0,1 trl vllm-serve \
+    --model /path/to/your/model \
+    --tensor-parallel-size 2 \
+    --port 8000
+```
+
+**Step 2: Enable GRPO Support and Multi-GPU Training**
+```bash
+# Use torchrun to start multi-GPU GRPO training
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 examples/grpo_open_r1_multi_gpu.py
+```
+
+#### GRPO Training Code Example
+```python
+import unsloth_multigpu as ump
+from unsloth import FastLanguageModel
+from trl import GRPOTrainer, GRPOConfig
+
+# 1. Enable GRPO support
+ump.enable_grpo_support()
+
+# 2. Enable multi-GPU support
+ump.enable_multi_gpu(
+    num_gpus=2,
+    batch_size_per_gpu=1,
+    ddp_backend="nccl",
+    enable_memory_optimization=True
+)
+
+# 3. Load model
+model, tokenizer = FastLanguageModel.from_pretrained(
+    "Qwen/Qwen2.5-3B-Instruct",
+    max_seq_length=8192,
+    load_in_4bit=True,
+)
+
+# 4. Configure LoRA
+model = FastLanguageModel.get_peft_model(
+    model,
+    r=16,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    lora_alpha=32,
+    use_gradient_checkpointing="unsloth",
+)
+
+# 5. Configure GRPO training arguments
+training_args = GRPOConfig(
+    output_dir="./grpo_output",
+    num_generations=8,
+    learning_rate=5e-6,
+    per_device_train_batch_size=1,
+    gradient_checkpointing=True,
+    use_vllm=True,  # Use vLLM for accelerated inference
+    vllm_server_host="127.0.0.1",
+    vllm_server_port=8000,
+)
+
+# 6. Prepare reward functions (requires open-r1 support)
+from open_r1.rewards import get_reward_funcs
+reward_funcs = get_reward_funcs(script_args)
+
+# 7. Create GRPO trainer
+trainer = GRPOTrainer(
+    model=model,
+    reward_funcs=reward_funcs,
+    args=training_args,
+    train_dataset=dataset,
+    processing_class=tokenizer,
+)
+
+# 8. Start training
+trainer.train()
+```
+
+#### GRPO Training Configuration Example (YAML)
+```yaml
+# examples/configs/grpo_open_r1_config.yaml
+model_name_or_path: Qwen/Qwen2.5-32B-Instruct
+dataset_name: data/grpo_data.jsonl
+
+# GRPO specific configuration
+use_vllm: true
+vllm_server_host: 127.0.0.1
+vllm_server_port: 8000
+num_generations: 8
+learning_rate: 5.0e-06
+per_device_train_batch_size: 1
+
+# Reward function configuration
+reward_funcs:
+  - accuracy
+  - format
+  - reasoning_steps
+  - cosine
+  - repetition_penalty
+  - length
+
+# LoRA configuration
+lora_r: 16
+gradient_checkpointing: true
+```
+
 #### Important: Difference Between Two Running Methods
 
 1. **Single Process Run** (`python script.py`):
@@ -193,31 +304,6 @@ optimal_config = config_manager.get_optimal_config(
 ump.enable_multi_gpu(**optimal_config)
 ```
 
-## 📁 Project Structure
-
-```
-unsloth_multigpu/
-├── __init__.py              # Main entry
-├── core/                    # Core components
-│   ├── multi_gpu_manager.py # Multi-GPU manager
-│   ├── batch_sharding.py    # Batch sharder
-│   ├── gradient_aggregator.py # Gradient aggregator
-│   ├── multi_gpu_trainer.py # Multi-GPU trainer
-│   └── memory_manager.py    # Memory manager
-├── hooks/                   # Hook system
-│   ├── training_hooks.py    # Training hooks
-│   ├── loader_hooks.py      # Loader hooks
-│   └── trainer_hooks.py     # Trainer hooks
-├── utils/                   # Utility modules
-│   ├── device_utils.py      # Device management
-│   ├── logging_utils.py     # Logging system
-│   └── config_utils.py      # Configuration management
-├── examples/                # Example code
-│   ├── quick_start.py       # Quick start
-│   └── advanced_config.py   # Advanced configuration
-└── tests/                   # Test suite
-```
-
 ## 🛠️ Core Features
 
 ### 1. Multi-GPU Management
@@ -271,11 +357,14 @@ See the `examples/` directory for examples:
 - `quick_start.py`: Basic example using the Hook mechanism (zero-intrusive)
 - `advanced_config.py`: Advanced configuration example for the Hook mechanism
 - `direct_trainer_usage.py`: Example of direct usage of MultiGPUTrainer
+- `grpo_open_r1_multi_gpu.py`: GRPO reinforcement learning multi-GPU training example
+- `configs/grpo_open_r1_config.yaml`: GRPO training YAML configuration example
 - `verify_installation.py`: Installation verification script
 
 ### Choosing the Right Method
 - **Migrating existing projects**: Use the Hook method in `quick_start.py`
 - **New project development**: Use the direct method in `direct_trainer_usage.py`
+- **GRPO reinforcement learning training**: Use `grpo_open_r1_multi_gpu.py` for multi-GPU GRPO training
 - **Advanced configuration**: Refer to `advanced_config.py`
 
 ## ⚠️ Notes
@@ -286,6 +375,8 @@ See the `examples/` directory for examples:
 4. **Python version**: Python 3.8+ required
 5. **DDP Training**: Multi-GPU training requires launching with torchrun
 6. **Memory Optimization**: Recommend using `load_in_4bit=True` to reduce VRAM usage
+7. **GRPO Training**: When using vLLM, start the inference service first, supports open-r1 professional reward functions
+8. **vLLM Service**: Start vLLM service for fast inference before GRPO training
 
 ## 🤝 Compatibility
 

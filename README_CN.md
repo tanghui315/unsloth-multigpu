@@ -115,6 +115,117 @@ trainer = SFTTrainer(
 trainer_stats = trainer.train()
 ```
 
+### 方式3: GRPO强化学习训练（Multi-GPU支持）
+
+GRPO (Generalized Reinforcement Learning from Policy Optimization) 是一种先进的强化学习训练方法，支持多GPU并行训练。
+
+#### GRPO训练完整步骤
+
+**步骤1: 启动vLLM推理服务**（如果使用vLLM推理）
+```bash
+# 启动vLLM服务用于快速推理（在单独终端中运行）
+CUDA_VISIBLE_DEVICES=0,1 trl vllm-serve \
+    --model /path/to/your/model \
+    --tensor-parallel-size 2 \
+    --port 8000
+```
+
+**步骤2: 启用GRPO支持并进行多GPU训练**
+```bash
+# 使用torchrun启动多GPU GRPO训练
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 examples/grpo_open_r1_multi_gpu.py
+```
+
+#### GRPO训练代码示例
+```python
+import unsloth_multigpu as ump
+from unsloth import FastLanguageModel
+from trl import GRPOTrainer, GRPOConfig
+
+# 1. 启用GRPO支持
+ump.enable_grpo_support()
+
+# 2. 启用多GPU支持
+ump.enable_multi_gpu(
+    num_gpus=2,
+    batch_size_per_gpu=1,
+    ddp_backend="nccl",
+    enable_memory_optimization=True
+)
+
+# 3. 加载模型
+model, tokenizer = FastLanguageModel.from_pretrained(
+    "Qwen/Qwen2.5-3B-Instruct",
+    max_seq_length=8192,
+    load_in_4bit=True,
+)
+
+# 4. 配置LoRA
+model = FastLanguageModel.get_peft_model(
+    model,
+    r=16,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    lora_alpha=32,
+    use_gradient_checkpointing="unsloth",
+)
+
+# 5. 配置GRPO训练参数
+training_args = GRPOConfig(
+    output_dir="./grpo_output",
+    num_generations=8,
+    learning_rate=5e-6,
+    per_device_train_batch_size=1,
+    gradient_checkpointing=True,
+    use_vllm=True,  # 使用vLLM加速推理
+    vllm_server_host="127.0.0.1",
+    vllm_server_port=8000,
+)
+
+# 6. 准备奖励函数（需要open-r1支持）
+from open_r1.rewards import get_reward_funcs
+reward_funcs = get_reward_funcs(script_args)
+
+# 7. 创建GRPO训练器
+trainer = GRPOTrainer(
+    model=model,
+    reward_funcs=reward_funcs,
+    args=training_args,
+    train_dataset=dataset,
+    processing_class=tokenizer,
+)
+
+# 8. 开始训练
+trainer.train()
+```
+
+#### GRPO训练配置文件示例（YAML）
+```yaml
+# examples/configs/grpo_open_r1_config.yaml
+model_name_or_path: Qwen/Qwen2.5-32B-Instruct
+dataset_name: data/grpo_data.jsonl
+
+# GRPO特定配置
+use_vllm: true
+vllm_server_host: 127.0.0.1
+vllm_server_port: 8000
+num_generations: 8
+learning_rate: 5.0e-06
+per_device_train_batch_size: 1
+
+# 奖励函数配置
+reward_funcs:
+  - accuracy
+  - format
+  - reasoning_steps
+  - cosine
+  - repetition_penalty
+  - length
+
+# LoRA配置
+lora_r: 16
+gradient_checkpointing: true
+```
+
 #### 重要说明：两种运行方式的区别
 
 1. **单进程运行**（`python script.py`）：
@@ -182,31 +293,6 @@ optimal_config = config_manager.get_optimal_config(
 unsloth_multigpu.enable_multi_gpu(**optimal_config)
 ```
 
-## 📁 项目结构
-
-```
-unsloth_multigpu/
-├── __init__.py              # 主入口
-├── core/                    # 核心组件
-│   ├── multi_gpu_manager.py # 多GPU管理器
-│   ├── batch_sharding.py    # 批次分片器
-│   ├── gradient_aggregator.py # 梯度聚合器
-│   ├── multi_gpu_trainer.py # 多GPU训练器
-│   └── memory_manager.py    # 内存管理器
-├── hooks/                   # Hook系统
-│   ├── training_hooks.py    # 训练Hook
-│   ├── loader_hooks.py      # 加载Hook
-│   └── trainer_hooks.py     # 训练器Hook
-├── utils/                   # 工具模块
-│   ├── device_utils.py      # 设备管理
-│   ├── logging_utils.py     # 日志系统
-│   └── config_utils.py      # 配置管理
-├── examples/                # 示例代码
-│   ├── quick_start.py       # 快速开始
-│   └── advanced_config.py   # 高级配置
-└── tests/                   # 测试套件
-```
-
 ## 🛠️ 核心功能
 
 ### 1. 多GPU管理
@@ -258,13 +344,16 @@ python tests/run_all_tests.py --quick
 
 查看 `examples/` 目录中的示例：
 - `quick_start.py`: Hook机制基础示例（零侵入性）
-- `advanced_config.py`: Hook机制高级配置示例
+- `advanced_config.py`: Hook机制高级配置示例  
 - `direct_trainer_usage.py`: 直接使用MultiGPUTrainer示例
+- `grpo_open_r1_multi_gpu.py`: GRPO强化学习多GPU训练示例
+- `configs/grpo_open_r1_config.yaml`: GRPO训练YAML配置示例
 - `verify_installation.py`: 安装验证脚本
 
 ### 选择合适的方式
 - **现有项目迁移**: 使用 `quick_start.py` 的Hook方式
 - **新项目开发**: 使用 `direct_trainer_usage.py` 的直接方式
+- **GRPO强化学习训练**: 使用 `grpo_open_r1_multi_gpu.py` 进行多GPU GRPO训练
 - **高级配置**: 参考 `advanced_config.py`
 
 ## ⚠️ 注意事项
@@ -275,6 +364,8 @@ python tests/run_all_tests.py --quick
 4. **Python版本**: 需要Python 3.8+
 5. **DDP训练**: 多GPU训练需要使用torchrun启动
 6. **显存优化**: 建议使用 `load_in_4bit=True` 减少显存占用
+7. **GRPO训练**: 使用vLLM时需要先启动推理服务，支持open-r1专业奖励函数
+8. **vLLM服务**: GRPO训练前需要启动vLLM服务用于快速推理
 
 ## 🤝 兼容性
 
